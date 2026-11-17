@@ -40,11 +40,20 @@ export class Modal extends React.Component {
       phone: '9988776655',
       address: 'JDoe 1120',
       birthday: '11-1-2020',
+      // The contact cards currently shown; removals delete from
+      // this list so the grid stays in sync with the modal actions.
+      contacts: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'],
+      // The card whose details are displayed in the modal; this is
+      // the contact the Remove action targets.
+      selectedContact: null,
+      // Whether the remove-confirmation dialog is shown. Deletion is
+      // two-step by design: the Remove button only opens this dialog
+      // and the contact is deleted solely on an explicit confirm.
+      confirmingRemove: false,
       // Whether the user has typed in the phone or email field; a card
       // click must never clobber a value the user is editing.
       phoneEdited: false,
       emailEdited: false,
-    };
   }
   handleClick(contactInfo) {
     const { phone, email, ...contact } = contactInfo;
@@ -81,19 +90,41 @@ export class Modal extends React.Component {
     this.setState({ email: event.target.value, emailEdited: true });
   }
 
+  handleCardClick(initial) {
+    this.setState({ selectedContact: initial });
+    this.handleClick({
+      name: 'Deepesh Nair',
+      email: 'denair@redhat.com',
+      phone: '9988776655',
+      address: 'JDoe 1120',
+      birthday: '11-1-2020',
+    });
+  }
+
+  handleRemoveRequest() {
+    this.setState({ confirmingRemove: true });
+  }
+
+  handleRemoveCancel() {
+    this.setState({ confirmingRemove: false });
+  }
+
+  handleRemoveConfirm() {
+    this.setState((prevState) => ({
+      contacts: prevState.contacts.filter(
+        (initial) => initial !== prevState.selectedContact
+      ),
+      selectedContact: null,
+      confirmingRemove: false,
+    }));
+  }
+
 renderModal() {
-  const names = [
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
-  ].map( (initial, i) => <div key={i} className="contact__card" data-toggle="modal" data-target=".contact-modal"
+  const names = this.state.contacts.map( (initial, i) =>
+    <div key={i} className="contact__card" data-toggle="modal" data-target=".contact-modal"
                            onClick={
                              () => {
-                               this.handleClick({
-                                name: 'Deepesh Nair',
-                                email: 'denair@redhat.com',
-                                phone: '9988776655',
-                                address: 'JDoe 1120',
-                                birthday: '11-1-2020',
-                               })
+                               this.handleCardClick(initial);
                              }
                            }>{initial} </div>);
   
@@ -102,6 +133,7 @@ renderModal() {
   const phone = this.state.phone;
   const address = this.state.address;
   const birthday = this.state.birthday;
+  const confirmingRemove = this.state.confirmingRemove;
   const isPhoneInvalid = !isValidPhone(phone);
   const isEmailInvalid = !isValidEmail(email);
   return (
@@ -112,10 +144,10 @@ renderModal() {
           <div className="modal-content">
             <div className="modal-header">
               <button className="btn"><i className="fa fa-edit"></i> Edit</button> 
-              {/* Removal is not implemented yet; keep the control
-                  disabled rather than offering a dead destructive
-                  action. */}
-              <button className="btn" disabled><i className="far fa-trash-alt"></i> Remove</button>
+              <button
+                className="btn"
+                onClick={ () => { this.handleRemoveRequest(); } }
+              ><i className="far fa-trash-alt"></i> Remove</button>
             </div>
             <div className="modal-body">
               <h1 id="contact-modal-title">
@@ -176,6 +208,30 @@ renderModal() {
           </div>
         </div>
       </div>
+      { confirmingRemove &&
+        <div className="modal fade confirm-modal show" tabIndex="-1" role="alertdialog"
+             aria-modal="true" aria-labelledby="confirmRemoveTitle">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-body">
+                <h2 id="confirmRemoveTitle" className="confirm-modal__title">
+                  Remove contact
+                </h2>
+                <p>
+                  Remove { name } from your contacts? This cannot be undone.
+                </p>
+              </div>
+              <div className="modal-footer">
+                <button className="btn" onClick={ () => { this.handleRemoveCancel(); } }>Cancel</button>
+                <button
+                  className="btn btn--danger"
+                  onClick={ () => { this.handleRemoveConfirm(); } }
+                >Remove contact</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
       </div>
   );
   }

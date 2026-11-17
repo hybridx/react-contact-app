@@ -309,6 +309,52 @@ describe('modal dialog labeling', () => {
   });
 });
 
+describe('remove confirmation', () => {
+  test('clicking Remove asks for confirmation instead of deleting the contact', () => {
+    const { getByText, getByRole } = render(<App />);
+
+    fireEvent.click(getByText('A'));
+    fireEvent.click(getByText('Remove'));
+
+    expect(getByRole('alertdialog')).toBeInTheDocument();
+    expect(getByText(/remove deepesh nair from your contacts\?/i)).toBeInTheDocument();
+    expect(getByText('A')).toBeInTheDocument();
+  });
+
+  test('canceling the confirmation keeps the contact', () => {
+    const { getByText, getByRole, queryByRole } = render(<App />);
+
+    fireEvent.click(getByText('B'));
+    fireEvent.click(getByText('Remove'));
+    fireEvent.click(getByRole('button', { name: 'Cancel' }));
+
+    expect(queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(getByText('B')).toBeInTheDocument();
+  });
+
+  test('confirming the removal deletes only the selected contact', () => {
+    const { getByText, getByRole, queryByText } = render(<App />);
+
+    fireEvent.click(getByText('C'));
+    fireEvent.click(getByText('Remove'));
+    fireEvent.click(getByRole('button', { name: 'Remove contact' }));
+
+    expect(queryByText('C')).not.toBeInTheDocument();
+    expect(getByText('D')).toBeInTheDocument();
+  });
+
+  test('a removal can be started again after being canceled', () => {
+    const { getByText, getByRole } = render(<App />);
+
+    fireEvent.click(getByText('D'));
+    fireEvent.click(getByText('Remove'));
+    fireEvent.click(getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(getByText('Remove'));
+
+    expect(getByRole('alertdialog')).toBeInTheDocument();
+  });
+});
+
 describe('handleClick phone gate', () => {
   test('refuses an invalid phone passed to handleClick and keeps the current value', () => {
     let modal;
