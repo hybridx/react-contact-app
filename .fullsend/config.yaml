@@ -21,7 +21,7 @@ roles:
 agents:
     - name: triage
       model: gateway/rits/zai-org/glm-5-3
-    - name: coder
+    - name: code
       model: gateway/rits/zai-org/glm-5-3
     - name: review
       model: gateway/rits/zai-org/glm-5-3
