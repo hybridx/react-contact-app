@@ -51,21 +51,32 @@ export class Modal extends React.Component {
     this.setState({ phone: event.target.value, phoneEdited: true });
   }
 
+  handleCardActivate() {
+    this.handleClick({
+      name: 'Deepesh Nair',
+      email: 'denair@redhat.com',
+      phone: '9988776655',
+      address: 'JDoe 1120',
+      birthday: '11-1-2020',
+    });
+  }
+
+  handleCardKeyDown(event) {
+    // The contact cards are divs styled as cards, so they need an
+    // explicit keyboard activation path alongside role="button".
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      this.handleCardActivate();
+    }
+  }
+
 renderModal() {
   const names = [
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
   ].map( (initial, i) => <div key={i} className="contact__card" data-toggle="modal" data-target=".contact-modal"
-                           onClick={
-                             () => {
-                               this.handleClick({
-                                name: 'Deepesh Nair',
-                                email: 'denair@redhat.com',
-                                phone: '9988776655',
-                                address: 'JDoe 1120',
-                                birthday: '11-1-2020',
-                               })
-                             }
-                           }>{initial} </div>);
+                           role="button" tabIndex={0} aria-label={ `Contact ${initial}` }
+                           onClick={ () => { this.handleCardActivate(); } }
+                           onKeyDown={ (event) => { this.handleCardKeyDown(event); } }>{initial} </div>);
   
   const name = this.state.name;
   const email = this.state.email;
@@ -84,7 +95,7 @@ renderModal() {
               <button className="btn"><i className="far fa-trash-alt"></i> Remove</button>
             </div>
             <div className="modal-body">
-              <h1>
+              <h1 id="contactModal">
                 { name }
               </h1>
               <div className="contact-information">
