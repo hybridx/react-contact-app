@@ -35,6 +35,11 @@ describe('isValidEmail', () => {
     expect(isValidEmail('name.surname+tag@example.co.uk')).toBe(true);
   });
 
+  test('treats an empty value as valid (field is optional)', () => {
+    expect(isValidEmail('')).toBe(true);
+    expect(isValidEmail('   ')).toBe(true);
+  });
+
   test('rejects an address without a dot in the domain', () => {
     expect(isValidEmail('foo@bar')).toBe(false);
   });
@@ -43,7 +48,6 @@ describe('isValidEmail', () => {
     expect(isValidEmail('foobar')).toBe(false);
     expect(isValidEmail('foo@')).toBe(false);
     expect(isValidEmail('@bar.com')).toBe(false);
-    expect(isValidEmail('')).toBe(false);
   });
 
   test('rejects an address containing whitespace', () => {
@@ -142,6 +146,20 @@ describe('email input validation', () => {
 
     expect(queryByText(/enter a valid email address/i)).not.toBeInTheDocument();
   });
+
+  test('clearing the email field shows no error (field is optional)', () => {
+    const { getByLabelText, queryByText } = render(<App />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.change(emailInput, { target: { value: 'foo@bar' } });
+    expect(queryByText(/enter a valid email address/i)).toBeInTheDocument();
+
+    fireEvent.change(emailInput, { target: { value: '' } });
+
+    expect(emailInput.value).toBe('');
+    expect(queryByText(/enter a valid email address/i)).not.toBeInTheDocument();
+    expect(emailInput).toHaveAttribute('aria-invalid', 'false');
+  });
 });
 
 describe('contact card interaction with the phone input', () => {
@@ -166,6 +184,31 @@ describe('contact card interaction with the phone input', () => {
     expect(phoneInput.value).toBe('abc123');
     expect(phoneInput).toHaveAttribute('aria-invalid', 'true');
     expect(getByText(/phone number can only contain/i)).toBeInTheDocument();
+  });
+});
+
+describe('contact card interaction with the email input', () => {
+  test('clicking a contact card does not clobber the email value being edited', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
+    fireEvent.click(getByText('A'));
+
+    expect(emailInput.value).toBe('test@example.com');
+    expect(emailInput).toHaveAttribute('aria-invalid', 'false');
+  });
+
+  test('clicking a contact card keeps an invalid email value and its error', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.change(emailInput, { target: { value: 'foo@bar' } });
+    fireEvent.click(getByText('B'));
+
+    expect(emailInput.value).toBe('foo@bar');
+    expect(emailInput).toHaveAttribute('aria-invalid', 'true');
+    expect(getByText(/enter a valid email address/i)).toBeInTheDocument();
   });
 });
 
@@ -200,5 +243,30 @@ describe('handleClick phone gate', () => {
     act(() => { modal.handleClick({ phone: '+91 555 0100' }); });
 
     expect(phoneInput.value).toBe('555-1234');
+  });
+});
+
+describe('handleClick email gate', () => {
+  test('ignores an email passed to handleClick and keeps the displayed value', () => {
+    let modal;
+    const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
+    const emailInput = getByLabelText(/email/i);
+    expect(emailInput.value).toBe('jdoe@redhat.com');
+
+    act(() => { modal.handleClick({ email: 'denair@redhat.com' }); });
+
+    expect(emailInput.value).toBe('jdoe@redhat.com');
+  });
+
+  test('never applies a passed email, even while the field is unedited', () => {
+    let modal;
+    const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.change(emailInput, { target: { value: 'foo@bar' } });
+    act(() => { modal.handleClick({ email: 'denair@redhat.com' }); });
+
+    expect(emailInput.value).toBe('foo@bar');
+    expect(emailInput).toHaveAttribute('aria-invalid', 'true');
   });
 });

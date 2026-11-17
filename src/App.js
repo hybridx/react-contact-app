@@ -14,9 +14,14 @@ export function isValidPhone(value) {
 
 // An email address is valid when it has a local part and a domain,
 // separated by a single @, and the domain contains a dot (e.g.
-// name@example.com). Values like "foo@bar" are rejected.
+// name@example.com). Values like "foo@bar" are rejected. An empty
+// value is allowed: the field is optional, like the phone field.
 export function isValidEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim());
+  const trimmed = String(value).trim();
+  if (trimmed === '') {
+    return true;
+  }
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
 }
 
 export class Modal extends React.Component {
@@ -34,8 +39,10 @@ export class Modal extends React.Component {
     };
   }
   handleClick(contactInfo) {
-    // Email is kept as the value the user sees/edits: like the phone
-    // field, a card click must not clobber what is on screen.
+    // Email from a card click is always ignored, matching the previous
+    // uncontrolled-input behavior of this field: whatever value the user
+    // sees/edits stays on screen, so a card click cannot clobber it.
+    // (Unlike the phone field, a valid email from a card is never applied.)
     const { phone, email, ...contact } = contactInfo;
     this.setState((prevState) => ({
       ...contact,
