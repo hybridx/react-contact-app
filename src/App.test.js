@@ -317,8 +317,11 @@ describe('remove confirmation', () => {
     fireEvent.click(getByText('Remove'));
 
     expect(getByRole('alertdialog')).toBeInTheDocument();
-    expect(getByText(/remove deepesh nair from your contacts\?/i)).toBeInTheDocument();
+    expect(getByText(/remove ava anderson from your contacts\?/i)).toBeInTheDocument();
     expect(getByText('A')).toBeInTheDocument();
+    // The detail dialog is exposed to assistive technology (no static
+    // aria-hidden) and labelled by the contact name heading.
+    expect(getByRole('dialog')).toBeInTheDocument();
   });
 
   test('canceling the confirmation keeps the contact', () => {
@@ -376,7 +379,7 @@ describe('remove confirmation', () => {
     expect(queryByText('E')).not.toBeInTheDocument();
     // The detail view no longer shows the removed contact's data.
     expect(getByText('John Doe')).toBeInTheDocument();
-    expect(queryByText('Deepesh Nair')).not.toBeInTheDocument();
+    expect(queryByText('Elena Reed')).not.toBeInTheDocument();
 
     const removeButton = getByText('Remove');
     expect(removeButton).toBeDisabled();
@@ -393,8 +396,21 @@ describe('remove confirmation', () => {
     fireEvent.click(getByRole('button', { name: 'Remove contact' }));
 
     expect(getByRole('status')).toHaveTextContent(
-      'Deepesh Nair was removed from your contacts.'
+      'Farah Khan was removed from your contacts.'
     );
+  });
+
+  test('confirming a removal moves focus to the grid instead of the disabled Remove button', () => {
+    const { getByText, getByRole } = render(<App />);
+
+    fireEvent.click(getByText('H'));
+    fireEvent.click(getByText('Remove'));
+    fireEvent.click(getByRole('button', { name: 'Remove contact' }));
+
+    // The Remove button is disabled after a confirmed removal and
+    // cannot take focus; focus moves to the first remaining card.
+    expect(getByText('Remove')).toBeDisabled();
+    expect(getByText('A')).toHaveFocus();
   });
 
   test('the confirmation dialog moves focus in, traps Tab, and cancels on Escape', () => {
@@ -418,6 +434,12 @@ describe('remove confirmation', () => {
     fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
     expect(confirmButton).toHaveFocus();
 
+    // The focusable dialog container counts as the first tab stop, so
+    // Shift+Tab from it wraps to the last button instead of escaping.
+    dialog.focus();
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
+    expect(confirmButton).toHaveFocus();
+
     // Escape cancels and returns focus to the Remove button.
     fireEvent.keyDown(dialog, { key: 'Escape' });
     expect(queryByRole('alertdialog')).not.toBeInTheDocument();
@@ -434,6 +456,8 @@ describe('remove confirmation', () => {
     });
 
     expect(getByText('No contacts yet')).toBeInTheDocument();
+    // With no cards left, focus lands on the focusable empty state.
+    expect(getByText('No contacts yet')).toHaveFocus();
   });
 });
 
