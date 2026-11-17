@@ -12,6 +12,13 @@ export function isValidPhone(value) {
   return /^\d+$/.test(digits);
 }
 
+// An email address is valid when it has a local part and a domain,
+// separated by a single @, and the domain contains a dot (e.g.
+// name@example.com). Values like "foo@bar" are rejected.
+export function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim());
+}
+
 export class Modal extends React.Component {
   constructor(props) {
     super(props);
@@ -27,7 +34,9 @@ export class Modal extends React.Component {
     };
   }
   handleClick(contactInfo) {
-    const { phone, ...contact } = contactInfo;
+    // Email is kept as the value the user sees/edits: like the phone
+    // field, a card click must not clobber what is on screen.
+    const { phone, email, ...contact } = contactInfo;
     this.setState((prevState) => ({
       ...contact,
       // Gate: an invalid phone value is never persisted — when one is
@@ -43,6 +52,10 @@ export class Modal extends React.Component {
 
   handlePhoneChange(event) {
     this.setState({ phone: event.target.value, phoneEdited: true });
+  }
+
+  handleEmailChange(event) {
+    this.setState({ email: event.target.value });
   }
 
 renderModal() {
@@ -67,6 +80,7 @@ renderModal() {
   const address = this.state.address;
   const birthday = this.state.birthday;
   const isPhoneInvalid = !isValidPhone(phone);
+  const isEmailInvalid = !isValidEmail(email);
   return (
     <div className="contact">
       { names }
@@ -86,7 +100,19 @@ renderModal() {
                   <label htmlFor="email">
                     Email
                   </label>
-                  <input type="email" id="email" defaultValue={ email }/>
+                  <input
+                    type="email"
+                    id="email"
+                    value={ email }
+                    onChange={ (event) => this.handleEmailChange(event) }
+                    aria-invalid={ isEmailInvalid }
+                    aria-errormessage={ isEmailInvalid ? 'email-error' : undefined }
+                  />
+                  { isEmailInvalid &&
+                    <span id="email-error" className="contact-information__error" role="status">
+                      Enter a valid email address such as name@example.com
+                    </span>
+                  }
                 </div>
                 <div className="contact-information__item">
                   <label htmlFor="contact">

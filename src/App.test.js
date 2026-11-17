@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react';
 import { act } from 'react-dom/test-utils';
-import App, { isValidPhone, Modal } from './App';
+import App, { isValidEmail, isValidPhone, Modal } from './App';
 
 describe('isValidPhone', () => {
   test('accepts digit-only phone numbers', () => {
@@ -26,6 +26,29 @@ describe('isValidPhone', () => {
   test('rejects separator-only input', () => {
     expect(isValidPhone('---')).toBe(false);
     expect(isValidPhone('+ ()')).toBe(false);
+  });
+});
+
+describe('isValidEmail', () => {
+  test('accepts a regular email address', () => {
+    expect(isValidEmail('jdoe@redhat.com')).toBe(true);
+    expect(isValidEmail('name.surname+tag@example.co.uk')).toBe(true);
+  });
+
+  test('rejects an address without a dot in the domain', () => {
+    expect(isValidEmail('foo@bar')).toBe(false);
+  });
+
+  test('rejects an address without an @ or with an empty part', () => {
+    expect(isValidEmail('foobar')).toBe(false);
+    expect(isValidEmail('foo@')).toBe(false);
+    expect(isValidEmail('@bar.com')).toBe(false);
+    expect(isValidEmail('')).toBe(false);
+  });
+
+  test('rejects an address containing whitespace', () => {
+    expect(isValidEmail('foo bar@example.com')).toBe(false);
+    expect(isValidEmail('foo@ bar')).toBe(false);
   });
 });
 
@@ -72,6 +95,52 @@ describe('phone input validation', () => {
     fireEvent.change(phoneInput, { target: { value: '+91 99887 76655' } });
 
     expect(queryByText(/phone number can only contain/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('email input validation', () => {
+  test('shows an inline error for an invalid email value and keeps the value', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.change(emailInput, { target: { value: 'foo@bar' } });
+
+    expect(emailInput.value).toBe('foo@bar');
+    expect(emailInput).toHaveAttribute('aria-invalid', 'true');
+    expect(getByText(/enter a valid email address/i)).toBeInTheDocument();
+  });
+
+  test('associates the inline error with the email input as polite feedback', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.change(emailInput, { target: { value: 'foo@bar' } });
+
+    expect(emailInput).toHaveAttribute('aria-errormessage', 'email-error');
+    const error = getByText(/enter a valid email address/i);
+    expect(error).toHaveAttribute('id', 'email-error');
+    expect(error).toHaveAttribute('role', 'status');
+  });
+
+  test('clears the inline error once the value is fixed', () => {
+    const { getByLabelText, queryByText } = render(<App />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.change(emailInput, { target: { value: 'foo@bar' } });
+    expect(queryByText(/enter a valid email address/i)).toBeInTheDocument();
+
+    fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
+    expect(queryByText(/enter a valid email address/i)).not.toBeInTheDocument();
+    expect(emailInput).toHaveAttribute('aria-invalid', 'false');
+  });
+
+  test('accepts a valid email address without showing an error', () => {
+    const { getByLabelText, queryByText } = render(<App />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
+
+    expect(queryByText(/enter a valid email address/i)).not.toBeInTheDocument();
   });
 });
 
