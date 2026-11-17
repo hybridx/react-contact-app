@@ -1,23 +1,48 @@
 import React from 'react';
 import './App.css';
 
+// A phone number is valid when it contains at least one digit and no
+// characters outside digits, spaces and the common separators + - ( ).
+// An empty value is allowed: the field is optional.
+export function isValidPhone(value) {
+  const digits = String(value).replace(/[\s+()-]/g, '');
+  if (digits === '') {
+    return String(value).trim() === '';
+  }
+  return /^\d+$/.test(digits);
+}
 
-
-class Modal extends React.Component {
+export class Modal extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
       name: 'John Doe',
       email: 'jdoe@redhat.com',
-      phone: 9988776655,
+      phone: '9988776655',
       address: 'JDoe 1120',
       birthday: '11-1-2020',
+      // Whether the user has typed in the phone field; a card click
+      // must never clobber a value the user is editing.
+      phoneEdited: false,
     };
   }
   handleClick(contactInfo) {
-    this.setState({
-      ...contactInfo
-    })
+    const { phone, ...contact } = contactInfo;
+    this.setState((prevState) => ({
+      ...contact,
+      // Gate: an invalid phone value is never persisted — when one is
+      // passed, the update is refused and the current value is kept.
+      // A valid phone is only applied while the user has not edited the
+      // field, so a card click cannot clobber the value being typed.
+      phone:
+        phone !== undefined && isValidPhone(phone) && !prevState.phoneEdited
+          ? phone
+          : prevState.phone,
+    }));
+  }
+
+  handlePhoneChange(event) {
+    this.setState({ phone: event.target.value, phoneEdited: true });
   }
 
 renderModal() {
@@ -29,7 +54,7 @@ renderModal() {
                                this.handleClick({
                                 name: 'Deepesh Nair',
                                 email: 'denair@redhat.com',
-                                phone: 9988776655,
+                                phone: '9988776655',
                                 address: 'JDoe 1120',
                                 birthday: '11-1-2020',
                                })
@@ -41,6 +66,7 @@ renderModal() {
   const phone = this.state.phone;
   const address = this.state.address;
   const birthday = this.state.birthday;
+  const isPhoneInvalid = !isValidPhone(phone);
   return (
     <div className="contact">
       { names }
@@ -66,7 +92,20 @@ renderModal() {
                   <label htmlFor="contact">
                     Contact
                   </label>
-                  <input type="number" id="contact" defaultValue={ phone }/>
+                  <input
+                    type="tel"
+                    id="contact"
+                    value={ phone }
+                    onChange={ (event) => this.handlePhoneChange(event) }
+                    aria-invalid={ isPhoneInvalid }
+                    aria-errormessage={ isPhoneInvalid ? 'contact-error' : undefined }
+                  />
+                  { isPhoneInvalid &&
+                    <span id="contact-error" className="contact-information__error" role="status">
+                      Phone number can only contain digits, spaces and the
+                      separators + - ( )
+                    </span>
+                  }
                 </div>
                 <div className="contact-information__item">
                   <label htmlFor="address">
