@@ -12,7 +12,7 @@ export function isValidPhone(value) {
   return /^\d+$/.test(digits);
 }
 
-class Modal extends React.Component {
+export class Modal extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
@@ -21,23 +21,28 @@ class Modal extends React.Component {
       phone: '9988776655',
       address: 'JDoe 1120',
       birthday: '11-1-2020',
+      // Whether the user has typed in the phone field; a card click
+      // must never clobber a value the user is editing.
+      phoneEdited: false,
     };
   }
   handleClick(contactInfo) {
     const { phone, ...contact } = contactInfo;
     this.setState((prevState) => ({
       ...contact,
-      // The phone input is controlled, so a card click must not clobber
-      // the value the user is editing: the phone is deliberately not
-      // taken from the card data. Gate: an invalid phone value is never
-      // persisted — when one is passed, the update is refused and the
-      // current value is kept.
-      phone: phone !== undefined && isValidPhone(phone) ? phone : prevState.phone,
+      // Gate: an invalid phone value is never persisted — when one is
+      // passed, the update is refused and the current value is kept.
+      // A valid phone is only applied while the user has not edited the
+      // field, so a card click cannot clobber the value being typed.
+      phone:
+        phone !== undefined && isValidPhone(phone) && !prevState.phoneEdited
+          ? phone
+          : prevState.phone,
     }));
   }
 
   handlePhoneChange(event) {
-    this.setState({ phone: event.target.value });
+    this.setState({ phone: event.target.value, phoneEdited: true });
   }
 
 renderModal() {
@@ -49,6 +54,7 @@ renderModal() {
                                this.handleClick({
                                 name: 'Deepesh Nair',
                                 email: 'denair@redhat.com',
+                                phone: '9988776655',
                                 address: 'JDoe 1120',
                                 birthday: '11-1-2020',
                                })

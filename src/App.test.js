@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react';
-import App, { isValidPhone } from './App';
+import { act } from 'react-dom/test-utils';
+import App, { isValidPhone, Modal } from './App';
 
 describe('isValidPhone', () => {
   test('accepts digit-only phone numbers', () => {
@@ -96,5 +97,39 @@ describe('contact card interaction with the phone input', () => {
     expect(phoneInput.value).toBe('abc123');
     expect(phoneInput).toHaveAttribute('aria-invalid', 'true');
     expect(getByText(/phone number can only contain/i)).toBeInTheDocument();
+  });
+});
+
+describe('handleClick phone gate', () => {
+  test('refuses an invalid phone passed to handleClick and keeps the current value', () => {
+    let modal;
+    const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
+    const phoneInput = getByLabelText(/contact/i);
+    expect(phoneInput.value).toBe('9988776655');
+
+    act(() => { modal.handleClick({ phone: 'abc123' }); });
+
+    expect(phoneInput.value).toBe('9988776655');
+  });
+
+  test('applies a valid phone passed to handleClick while the field is unedited', () => {
+    let modal;
+    const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
+    const phoneInput = getByLabelText(/contact/i);
+
+    act(() => { modal.handleClick({ phone: '+91 555 0100' }); });
+
+    expect(phoneInput.value).toBe('+91 555 0100');
+  });
+
+  test('never applies a passed phone once the user has edited the field', () => {
+    let modal;
+    const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
+    const phoneInput = getByLabelText(/contact/i);
+
+    fireEvent.change(phoneInput, { target: { value: '555-1234' } });
+    act(() => { modal.handleClick({ phone: '+91 555 0100' }); });
+
+    expect(phoneInput.value).toBe('555-1234');
   });
 });
