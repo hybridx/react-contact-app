@@ -70,3 +70,9 @@ body {
 .modal-body .contact-information .contact-information__item label {
   margin: 0;
 }
+
+.modal-body .contact-information .contact-information__error {
+  color: #b00020;
+  font-size: 0.8rem;
+  margin-left: 1rem;
+}

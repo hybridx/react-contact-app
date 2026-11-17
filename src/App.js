@@ -1,7 +1,16 @@
 import React from 'react';
 import './App.css';
 
-
+// A phone number is valid when it contains at least one digit and no
+// characters outside digits, spaces and the common separators + - ( ).
+// An empty value is allowed: the field is optional.
+export function isValidPhone(value) {
+  const digits = String(value).replace(/[\s+()-]/g, '');
+  if (digits === '') {
+    return String(value).trim() === '';
+  }
+  return /^\d+$/.test(digits);
+}
 
 class Modal extends React.Component {
   constructor(props) {
@@ -9,7 +18,7 @@ class Modal extends React.Component {
     this.state = {
       name: 'John Doe',
       email: 'jdoe@redhat.com',
-      phone: 9988776655,
+      phone: '9988776655',
       address: 'JDoe 1120',
       birthday: '11-1-2020',
     };
@@ -18,6 +27,10 @@ class Modal extends React.Component {
     this.setState({
       ...contactInfo
     })
+  }
+
+  handlePhoneChange(event) {
+    this.setState({ phone: event.target.value });
   }
 
 renderModal() {
@@ -29,7 +42,7 @@ renderModal() {
                                this.handleClick({
                                 name: 'Deepesh Nair',
                                 email: 'denair@redhat.com',
-                                phone: 9988776655,
+                                phone: '9988776655',
                                 address: 'JDoe 1120',
                                 birthday: '11-1-2020',
                                })
@@ -66,7 +79,19 @@ renderModal() {
                   <label htmlFor="contact">
                     Contact
                   </label>
-                  <input type="number" id="contact" defaultValue={ phone }/>
+                  <input
+                    type="tel"
+                    id="contact"
+                    value={ phone }
+                    onChange={ (event) => this.handlePhoneChange(event) }
+                    aria-invalid={ !isValidPhone(phone) }
+                  />
+                  { !isValidPhone(phone) &&
+                    <span className="contact-information__error" role="alert">
+                      Phone number can only contain digits, spaces and the
+                      separators + - ( )
+                    </span>
+                  }
                 </div>
                 <div className="contact-information__item">
                   <label htmlFor="address">
