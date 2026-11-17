@@ -40,6 +40,18 @@ describe('phone input validation', () => {
     expect(getByText(/phone number can only contain/i)).toBeInTheDocument();
   });
 
+  test('associates the inline error with the phone input as polite feedback', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const phoneInput = getByLabelText(/contact/i);
+
+    fireEvent.change(phoneInput, { target: { value: 'abc123' } });
+
+    expect(phoneInput).toHaveAttribute('aria-errormessage', 'contact-error');
+    const error = getByText(/phone number can only contain/i);
+    expect(error).toHaveAttribute('id', 'contact-error');
+    expect(error).toHaveAttribute('role', 'status');
+  });
+
   test('clears the inline error once the value is fixed', () => {
     const { getByLabelText, queryByText } = render(<App />);
     const phoneInput = getByLabelText(/contact/i);
@@ -59,5 +71,30 @@ describe('phone input validation', () => {
     fireEvent.change(phoneInput, { target: { value: '+91 99887 76655' } });
 
     expect(queryByText(/phone number can only contain/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('contact card interaction with the phone input', () => {
+  test('clicking a contact card does not clobber the phone value being edited', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const phoneInput = getByLabelText(/contact/i);
+
+    fireEvent.change(phoneInput, { target: { value: '+91 99887 76655' } });
+    fireEvent.click(getByText('A'));
+
+    expect(phoneInput.value).toBe('+91 99887 76655');
+    expect(phoneInput).toHaveAttribute('aria-invalid', 'false');
+  });
+
+  test('clicking a contact card keeps an invalid phone value and its error', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const phoneInput = getByLabelText(/contact/i);
+
+    fireEvent.change(phoneInput, { target: { value: 'abc123' } });
+    fireEvent.click(getByText('B'));
+
+    expect(phoneInput.value).toBe('abc123');
+    expect(phoneInput).toHaveAttribute('aria-invalid', 'true');
+    expect(getByText(/phone number can only contain/i)).toBeInTheDocument();
   });
 });

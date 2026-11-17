@@ -24,9 +24,16 @@ class Modal extends React.Component {
     };
   }
   handleClick(contactInfo) {
-    this.setState({
-      ...contactInfo
-    })
+    const { phone, ...contact } = contactInfo;
+    this.setState((prevState) => ({
+      ...contact,
+      // The phone input is controlled, so a card click must not clobber
+      // the value the user is editing: the phone is deliberately not
+      // taken from the card data. Gate: an invalid phone value is never
+      // persisted — when one is passed, the update is refused and the
+      // current value is kept.
+      phone: phone !== undefined && isValidPhone(phone) ? phone : prevState.phone,
+    }));
   }
 
   handlePhoneChange(event) {
@@ -42,7 +49,6 @@ renderModal() {
                                this.handleClick({
                                 name: 'Deepesh Nair',
                                 email: 'denair@redhat.com',
-                                phone: '9988776655',
                                 address: 'JDoe 1120',
                                 birthday: '11-1-2020',
                                })
@@ -54,6 +60,7 @@ renderModal() {
   const phone = this.state.phone;
   const address = this.state.address;
   const birthday = this.state.birthday;
+  const isPhoneInvalid = !isValidPhone(phone);
   return (
     <div className="contact">
       { names }
@@ -84,10 +91,11 @@ renderModal() {
                     id="contact"
                     value={ phone }
                     onChange={ (event) => this.handlePhoneChange(event) }
-                    aria-invalid={ !isValidPhone(phone) }
+                    aria-invalid={ isPhoneInvalid }
+                    aria-errormessage={ isPhoneInvalid ? 'contact-error' : undefined }
                   />
-                  { !isValidPhone(phone) &&
-                    <span className="contact-information__error" role="alert">
+                  { isPhoneInvalid &&
+                    <span id="contact-error" className="contact-information__error" role="status">
                       Phone number can only contain digits, spaces and the
                       separators + - ( )
                     </span>
