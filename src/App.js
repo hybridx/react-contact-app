@@ -38,6 +38,12 @@ export class Modal extends React.Component {
         phone !== undefined && isValidPhone(phone) && !prevState.phoneEdited
           ? phone
           : prevState.phone,
+      // Reset the edit latch together with the card's fields so the
+      // next card click can apply its phone. The gate above still
+      // reads the pre-click flag, so a value the user is actively
+      // typing (the keystroke that armed the latch between clicks)
+      // is never clobbered by this click.
+      phoneEdited: false,
     }));
   }
 
