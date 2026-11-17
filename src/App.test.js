@@ -54,6 +54,11 @@ describe('isValidEmail', () => {
     expect(isValidEmail('foo bar@example.com')).toBe(false);
     expect(isValidEmail('foo@ bar')).toBe(false);
   });
+
+  test('rejects a domain with consecutive or trailing dots', () => {
+    expect(isValidEmail('a@b..com')).toBe(false);
+    expect(isValidEmail('a@b.com.')).toBe(false);
+  });
 });
 
 describe('phone input validation', () => {
@@ -188,6 +193,16 @@ describe('contact card interaction with the phone input', () => {
 });
 
 describe('contact card interaction with the email input', () => {
+  test('clicking a contact card applies the valid email while the field is unedited', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.click(getByText('A'));
+
+    expect(emailInput.value).toBe('denair@redhat.com');
+    expect(emailInput).toHaveAttribute('aria-invalid', 'false');
+  });
+
   test('clicking a contact card does not clobber the email value being edited', () => {
     const { getByLabelText, getByText } = render(<App />);
     const emailInput = getByLabelText(/email/i);
@@ -247,26 +262,35 @@ describe('handleClick phone gate', () => {
 });
 
 describe('handleClick email gate', () => {
-  test('ignores an email passed to handleClick and keeps the displayed value', () => {
+  test('refuses an invalid email passed to handleClick and keeps the current value', () => {
     let modal;
     const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
     const emailInput = getByLabelText(/email/i);
     expect(emailInput.value).toBe('jdoe@redhat.com');
 
-    act(() => { modal.handleClick({ email: 'denair@redhat.com' }); });
+    act(() => { modal.handleClick({ email: 'foo@bar' }); });
 
     expect(emailInput.value).toBe('jdoe@redhat.com');
   });
 
-  test('never applies a passed email, even while the field is unedited', () => {
+  test('applies a valid email passed to handleClick while the field is unedited', () => {
     let modal;
     const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
     const emailInput = getByLabelText(/email/i);
 
-    fireEvent.change(emailInput, { target: { value: 'foo@bar' } });
     act(() => { modal.handleClick({ email: 'denair@redhat.com' }); });
 
-    expect(emailInput.value).toBe('foo@bar');
-    expect(emailInput).toHaveAttribute('aria-invalid', 'true');
+    expect(emailInput.value).toBe('denair@redhat.com');
+  });
+
+  test('never applies a passed email once the user has edited the field', () => {
+    let modal;
+    const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.change(emailInput, { target: { value: 'custom@example.org' } });
+    act(() => { modal.handleClick({ email: 'denair@redhat.com' }); });
+
+    expect(emailInput.value).toBe('custom@example.org');
   });
 });

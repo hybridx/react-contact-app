@@ -13,15 +13,22 @@ export function isValidPhone(value) {
 }
 
 // An email address is valid when it has a local part and a domain,
-// separated by a single @, and the domain contains a dot (e.g.
-// name@example.com). Values like "foo@bar" are rejected. An empty
-// value is allowed: the field is optional, like the phone field.
+// separated by a single @, and a well-formed dotted domain (e.g.
+// name@example.com). Values like "foo@bar" are rejected, as are
+// domains with consecutive or trailing dots ("a@b..com", "a@b.com.").
+// An empty value is allowed: the field is optional, like the phone field.
 export function isValidEmail(value) {
   const trimmed = String(value).trim();
   if (trimmed === '') {
     return true;
   }
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    return false;
+  }
+  // The shape check above lets the dot-containing character classes
+  // absorb extra dots, so reject malformed domains explicitly.
+  const domain = trimmed.slice(trimmed.indexOf('@') + 1);
+  return !domain.includes('..') && !domain.endsWith('.');
 }
 
 export class Modal extends React.Component {
@@ -33,27 +40,29 @@ export class Modal extends React.Component {
       phone: '9988776655',
       address: 'JDoe 1120',
       birthday: '11-1-2020',
-      // Whether the user has typed in the phone field; a card click
-      // must never clobber a value the user is editing.
+      // Whether the user has typed in the phone or email field; a card
+      // click must never clobber a value the user is editing.
       phoneEdited: false,
+      emailEdited: false,
     };
   }
   handleClick(contactInfo) {
-    // Email from a card click is always ignored, matching the previous
-    // uncontrolled-input behavior of this field: whatever value the user
-    // sees/edits stays on screen, so a card click cannot clobber it.
-    // (Unlike the phone field, a valid email from a card is never applied.)
     const { phone, email, ...contact } = contactInfo;
     this.setState((prevState) => ({
       ...contact,
-      // Gate: an invalid phone value is never persisted — when one is
-      // passed, the update is refused and the current value is kept.
-      // A valid phone is only applied while the user has not edited the
-      // field, so a card click cannot clobber the value being typed.
+      // Gate: an invalid phone or email value is never persisted — when
+      // one is passed, the update is refused and the current value is
+      // kept. A valid value is only applied while the user has not
+      // edited the field, so a card click cannot clobber the value
+      // being typed.
       phone:
         phone !== undefined && isValidPhone(phone) && !prevState.phoneEdited
           ? phone
           : prevState.phone,
+      email:
+        email !== undefined && isValidEmail(email) && !prevState.emailEdited
+          ? email
+          : prevState.email,
     }));
   }
 
@@ -62,7 +71,7 @@ export class Modal extends React.Component {
   }
 
   handleEmailChange(event) {
-    this.setState({ email: event.target.value });
+    this.setState({ email: event.target.value, emailEdited: true });
   }
 
 renderModal() {
