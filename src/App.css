@@ -39,6 +39,26 @@ body {
   color: #535353;
 }
 
+.modal-header button.btn:disabled {
+  color: #a3b1c6;
+  cursor: not-allowed;
+}
+
+.contact__empty {
+  width: 100%;
+  margin: 3rem 1rem;
+  text-align: center;
+  color: #535353;
+  font-size: 1.25rem;
+}
+
+.contact__removal-notice {
+  width: 100%;
+  margin: 0 1rem;
+  color: #535353;
+  font-size: 0.9rem;
+}
+
 .modal-header button:first-child {
   margin-right: 1.5rem;
 }

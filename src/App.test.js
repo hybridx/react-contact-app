@@ -353,6 +353,88 @@ describe('remove confirmation', () => {
 
     expect(getByRole('alertdialog')).toBeInTheDocument();
   });
+
+  test('Remove is unavailable before any card is selected', () => {
+    const { getByText, queryByRole } = render(<App />);
+
+    const removeButton = getByText('Remove');
+    expect(removeButton).toBeDisabled();
+
+    fireEvent.click(removeButton);
+
+    expect(queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  test('Remove is unavailable again after a confirmed removal and the detail view is reset', () => {
+    const { getByText, getByRole, queryByRole, queryByText } = render(<App />);
+
+    fireEvent.click(getByText('E'));
+    fireEvent.click(getByText('Remove'));
+    fireEvent.click(getByRole('button', { name: 'Remove contact' }));
+
+    expect(queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(queryByText('E')).not.toBeInTheDocument();
+    // The detail view no longer shows the removed contact's data.
+    expect(getByText('John Doe')).toBeInTheDocument();
+    expect(queryByText('Deepesh Nair')).not.toBeInTheDocument();
+
+    const removeButton = getByText('Remove');
+    expect(removeButton).toBeDisabled();
+    fireEvent.click(removeButton);
+
+    expect(queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  test('confirming a removal announces it via a status message', () => {
+    const { getByText, getByRole } = render(<App />);
+
+    fireEvent.click(getByText('F'));
+    fireEvent.click(getByText('Remove'));
+    fireEvent.click(getByRole('button', { name: 'Remove contact' }));
+
+    expect(getByRole('status')).toHaveTextContent(
+      'Deepesh Nair was removed from your contacts.'
+    );
+  });
+
+  test('the confirmation dialog moves focus in, traps Tab, and cancels on Escape', () => {
+    const { getByText, getByRole, queryByRole } = render(<App />);
+
+    fireEvent.click(getByText('G'));
+    fireEvent.click(getByText('Remove'));
+
+    const dialog = getByRole('alertdialog');
+    const cancelButton = getByRole('button', { name: 'Cancel' });
+    const confirmButton = getByRole('button', { name: 'Remove contact' });
+
+    // Focus moves into the dialog when it opens.
+    expect(cancelButton).toHaveFocus();
+
+    // Tab cycles within the dialog instead of reaching the page behind it.
+    confirmButton.focus();
+    fireEvent.keyDown(dialog, { key: 'Tab' });
+    expect(cancelButton).toHaveFocus();
+
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
+    expect(confirmButton).toHaveFocus();
+
+    // Escape cancels and returns focus to the Remove button.
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(getByText('Remove')).toHaveFocus();
+  });
+
+  test('shows an empty state once every contact has been removed', () => {
+    const { getByText, getByRole } = render(<App />);
+
+    ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'].forEach((initial) => {
+      fireEvent.click(getByText(initial));
+      fireEvent.click(getByText('Remove'));
+      fireEvent.click(getByRole('button', { name: 'Remove contact' }));
+    });
+
+    expect(getByText('No contacts yet')).toBeInTheDocument();
+  });
 });
 
 describe('handleClick phone gate', () => {
