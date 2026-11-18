@@ -63,12 +63,13 @@ export class Modal extends React.Component {
         email !== undefined && isValidEmail(email) && !prevState.emailEdited
           ? email
           : prevState.email,
-      // Reset the phone edit latch together with the card's fields so
-      // the next card click can apply its phone. The gate above still
-      // reads the pre-click flag, so a value the user is actively
+      // Reset the phone and email edit latches together with the card's
+      // fields so the next card click can apply its values. The gate above
+      // still reads the pre-click flag, so a value the user is actively
       // typing (the keystroke that armed the latch between clicks) is
       // never clobbered by this click.
       phoneEdited: false,
+      emailEdited: false,
     }));
   }
 
