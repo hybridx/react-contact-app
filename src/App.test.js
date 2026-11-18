@@ -309,6 +309,41 @@ describe('modal dialog labeling', () => {
   });
 });
 
+describe('contact card interaction with the email input', () => {
+  test('clicking a contact card applies the valid email while the field is unedited', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.click(getByText('A'));
+
+    expect(emailInput.value).toBe('denair@redhat.com');
+    expect(emailInput).toHaveAttribute('aria-invalid', 'false');
+  });
+
+  test('clicking a contact card does not clobber the email value being edited', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
+    fireEvent.click(getByText('A'));
+
+    expect(emailInput.value).toBe('test@example.com');
+    expect(emailInput).toHaveAttribute('aria-invalid', 'false');
+  });
+
+  test('clicking a contact card keeps an invalid email value and its error', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.change(emailInput, { target: { value: 'foo@bar' } });
+    fireEvent.click(getByText('B'));
+
+    expect(emailInput.value).toBe('foo@bar');
+    expect(emailInput).toHaveAttribute('aria-invalid', 'true');
+    expect(getByText(/enter a valid email address/i)).toBeInTheDocument();
+  });
+});
+
 describe('remove confirmation', () => {
   test('clicking Remove asks for confirmation instead of deleting the contact', () => {
     const { getByText, getByRole } = render(<App />);
@@ -317,14 +352,15 @@ describe('remove confirmation', () => {
     fireEvent.click(getByText('Remove'));
 
     expect(getByRole('alertdialog')).toBeInTheDocument();
-    expect(getByText(/remove ava anderson from your contacts\?/i)).toBeInTheDocument();
+    expect(getByText(/remove deepesh nair from your contacts\?/i)).toBeInTheDocument();
     expect(getByText('A')).toBeInTheDocument();
     // The detail dialog is exposed to assistive technology (no static
-    // aria-hidden) and labelled by the contact name heading.
+    // aria-hidden), labelled by the contact name heading, and open.
     expect(getByRole('dialog')).toBeInTheDocument();
+    expect(getByRole('dialog')).toHaveClass('show');
   });
 
-  test('canceling the confirmation keeps the contact', () => {
+  test('canceling the confirmation keeps the contact and the detail modal open', () => {
     const { getByText, getByRole, queryByRole } = render(<App />);
 
     fireEvent.click(getByText('B'));
@@ -333,6 +369,7 @@ describe('remove confirmation', () => {
 
     expect(queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(getByText('B')).toBeInTheDocument();
+    expect(getByRole('dialog')).toHaveClass('show');
   });
 
   test('confirming the removal deletes only the selected contact', () => {
@@ -360,6 +397,9 @@ describe('remove confirmation', () => {
   test('Remove is unavailable before any card is selected', () => {
     const { getByText, queryByRole } = render(<App />);
 
+    // The detail modal is closed while no card is selected.
+    expect(queryByRole('dialog')).not.toBeInTheDocument();
+
     const removeButton = getByText('Remove');
     expect(removeButton).toBeDisabled();
 
@@ -368,18 +408,22 @@ describe('remove confirmation', () => {
     expect(queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
-  test('Remove is unavailable again after a confirmed removal and the detail view is reset', () => {
+  test('confirming a removal closes the detail modal and resets the detail view', () => {
     const { getByText, getByRole, queryByRole, queryByText } = render(<App />);
 
     fireEvent.click(getByText('E'));
+    expect(getByRole('dialog')).toHaveClass('show');
+
     fireEvent.click(getByText('Remove'));
     fireEvent.click(getByRole('button', { name: 'Remove contact' }));
 
     expect(queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(queryByText('E')).not.toBeInTheDocument();
-    // The detail view no longer shows the removed contact's data.
+    // The detail modal is closed after a confirmed removal, and the
+    // detail view behind it is reset to the defaults.
+    expect(queryByRole('dialog')).not.toBeInTheDocument();
     expect(getByText('John Doe')).toBeInTheDocument();
-    expect(queryByText('Elena Reed')).not.toBeInTheDocument();
+    expect(queryByText('Deepesh Nair')).not.toBeInTheDocument();
 
     const removeButton = getByText('Remove');
     expect(removeButton).toBeDisabled();
@@ -396,19 +440,20 @@ describe('remove confirmation', () => {
     fireEvent.click(getByRole('button', { name: 'Remove contact' }));
 
     expect(getByRole('status')).toHaveTextContent(
-      'Farah Khan was removed from your contacts.'
+      'Deepesh Nair was removed from your contacts.'
     );
   });
 
   test('confirming a removal moves focus to the grid instead of the disabled Remove button', () => {
-    const { getByText, getByRole } = render(<App />);
+    const { getByText, getByRole, queryByRole } = render(<App />);
 
     fireEvent.click(getByText('H'));
     fireEvent.click(getByText('Remove'));
     fireEvent.click(getByRole('button', { name: 'Remove contact' }));
 
-    // The Remove button is disabled after a confirmed removal and
-    // cannot take focus; focus moves to the first remaining card.
+    // The detail modal is closed and its Remove button disabled after
+    // a confirmed removal, so focus moves to the first remaining card.
+    expect(queryByRole('dialog')).not.toBeInTheDocument();
     expect(getByText('Remove')).toBeDisabled();
     expect(getByText('A')).toHaveFocus();
   });
@@ -446,6 +491,42 @@ describe('remove confirmation', () => {
     expect(getByText('Remove')).toHaveFocus();
   });
 
+  test('clicking another card dismisses an open confirmation dialog', () => {
+    const { getByText, getByRole, queryByRole, queryByText } = render(<App />);
+
+    fireEvent.click(getByText('A'));
+    fireEvent.click(getByText('Remove'));
+    expect(getByRole('alertdialog')).toBeInTheDocument();
+
+    // A pending confirmation cannot retarget to a different contact:
+    // the card click dismisses it, and the next confirmation applies
+    // to the newly selected card only.
+    fireEvent.click(getByText('B'));
+    expect(queryByRole('alertdialog')).not.toBeInTheDocument();
+
+    fireEvent.click(getByText('Remove'));
+    fireEvent.click(getByRole('button', { name: 'Remove contact' }));
+
+    expect(queryByText('B')).not.toBeInTheDocument();
+    expect(getByText('A')).toBeInTheDocument();
+  });
+
+  test("clicking a card after a confirmed removal applies that contact's details", () => {
+    const { getByLabelText, getByText, getByRole } = render(<App />);
+
+    fireEvent.click(getByText('E'));
+    fireEvent.click(getByText('Remove'));
+    fireEvent.click(getByRole('button', { name: 'Remove contact' }));
+
+    // The removal reset the edited-field latches, so the phone and
+    // email of the newly selected contact are applied again.
+    fireEvent.click(getByText('D'));
+
+    expect(getByRole('dialog')).toHaveClass('show');
+    expect(getByLabelText(/email/i).value).toBe('denair@redhat.com');
+    expect(getByLabelText(/contact/i).value).toBe('9988776655');
+  });
+
   test('shows an empty state once every contact has been removed', () => {
     const { getByText, getByRole } = render(<App />);
 
@@ -458,6 +539,18 @@ describe('remove confirmation', () => {
     expect(getByText('No contacts yet')).toBeInTheDocument();
     // With no cards left, focus lands on the focusable empty state.
     expect(getByText('No contacts yet')).toHaveFocus();
+  });
+});
+
+describe('contact card accessibility', () => {
+  test('cards expose the full contact name as their accessible name', () => {
+    const { container } = render(<App />);
+
+    const cards = container.querySelectorAll('.contact__card');
+    expect(cards).toHaveLength(10);
+    cards.forEach((card) => {
+      expect(card).toHaveAttribute('aria-label', 'Deepesh Nair');
+    });
   });
 });
 

@@ -2,6 +2,10 @@ body {
   background: #e1e6ed;
 }
 
+:root {
+  --danger: #b00020;
+}
+
 .contact {
   display: flex;
   flex-wrap: wrap;
@@ -38,19 +42,6 @@ body {
   box-shadow: inset 9px 9px 16px rgb(163,177,198,0.6), inset -9px -9px 16px rgba(255,255,255, 0.5);
 }
 
-.modal-header {
-  justify-content: flex-end;
-}
-
-.modal-header button.btn {
-  color: #535353;
-}
-
-.modal-header button.btn:disabled {
-  color: #a3b1c6;
-  cursor: not-allowed;
-}
-
 .contact__empty {
   width: 100%;
   margin: 3rem 1rem;
@@ -64,6 +55,20 @@ body {
   margin: 0 1rem;
   color: #535353;
   font-size: 0.9rem;
+}
+
+.modal-header,
+.confirm-modal .modal-footer {
+  justify-content: flex-end;
+}
+
+.modal-header button.btn {
+  color: #535353;
+}
+
+.modal-header button.btn:disabled {
+  color: #a3b1c6;
+  cursor: not-allowed;
 }
 
 .modal-header button:first-child {
@@ -99,18 +104,19 @@ body {
 }
 
 .modal-body .contact-information .contact-information__error {
-  color: #b00020;
+  color: var(--danger);
   font-size: 0.8rem;
   margin-left: 1rem;
 }
 
-.confirm-modal .modal-footer {
-  justify-content: flex-end;
-  border: none;
+/* Destructive actions and error text share the danger color declared
+   as --danger above. */
+.btn--danger {
+  color: var(--danger);
 }
 
-.confirm-modal .modal-footer .btn--danger {
-  color: #b00020;
+.confirm-modal .modal-footer {
+  border: none;
 }
 
 .confirm-modal .modal-body .confirm-modal__title {

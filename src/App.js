@@ -31,44 +31,36 @@ export function isValidEmail(value) {
   return !domain.includes('..') && !domain.endsWith('.');
 }
 
-// The contact details shown when no card is open; also the state the
-// detail view is reset to after a contact has been removed.
-const DEFAULT_CONTACT = {
-  name: 'John Doe',
-  email: 'jdoe@redhat.com',
-  phone: '9988776655',
-  address: 'JDoe 1120',
-  birthday: '11-1-2020',
-};
-
-// The demo details seeded into every card's contact record. Kept
-// separate from the card list so a card's identity is never conflated
-// with the record it shows.
+// The demo details opened for every contact card and inherited by the
+// default record below, so the shared values exist exactly once.
 const DEMO_CONTACT = {
   phone: '9988776655',
   address: 'JDoe 1120',
   birthday: '11-1-2020',
 };
 
-// The cards shown in the grid. Each card carries a stable id, the
-// initial rendered on it, and its own contact record, so a removal
-// targets exactly one card and the confirmation dialog names the
-// contact that card actually represents.
+// The contact details shown when no card is open; also the state the
+// detail view is reset to after a contact has been removed.
+const DEFAULT_CONTACT = {
+  name: 'John Doe',
+  email: 'jdoe@redhat.com',
+  ...DEMO_CONTACT,
+};
+
+// The cards shown in the grid. Each card carries a stable id and the
+// initial rendered on it, so a removal targets exactly one card. The
+// contact record is the demo record the base app opened for every
+// card, so this change does not alter the app's existing demo data.
 const CONTACT_CARDS = [
-  { name: 'Ava Anderson', email: 'aanderson@redhat.com' },
-  { name: 'Ben Brooks', email: 'bbrooks@redhat.com' },
-  { name: 'Carla Costa', email: 'ccosta@redhat.com' },
-  { name: 'Dev Patel', email: 'dpatel@redhat.com' },
-  { name: 'Elena Reed', email: 'ereed@redhat.com' },
-  { name: 'Farah Khan', email: 'fkhan@redhat.com' },
-  { name: 'Grace Liu', email: 'gliu@redhat.com' },
-  { name: 'Hugo Marsh', email: 'hmarsh@redhat.com' },
-  { name: 'Iris Nolan', email: 'inolan@redhat.com' },
-  { name: 'Jonas Vidal', email: 'jvidal@redhat.com' },
-].map((contact, index) => ({
+  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+].map((initial, index) => ({
   id: index + 1,
-  initial: contact.name.charAt(0),
-  contact: { ...DEMO_CONTACT, ...contact },
+  initial,
+  contact: {
+    name: 'Deepesh Nair',
+    email: 'denair@redhat.com',
+    ...DEMO_CONTACT,
+  },
 }));
 
 export class Modal extends React.Component {
@@ -90,6 +82,13 @@ export class Modal extends React.Component {
       // Status message announcing a completed removal; rendered with
       // role="status" so assistive technology picks it up.
       removalNotice: null,
+      // Whether the contact detail modal is shown. Its open state is
+      // managed here in React rather than via Bootstrap's data-toggle,
+      // so the modal can also be closed programmatically — notably
+      // after a confirmed removal, before focus moves back to the
+      // grid. This also keeps Bootstrap's own modal focus enforcement
+      // out of the way of the confirmation dialog's focus handling.
+      detailModalOpen: false,
       // Whether the user has typed in the phone or email field; a card
       // click must never clobber a value the user is editing.
       phoneEdited: false,
@@ -131,7 +130,15 @@ export class Modal extends React.Component {
   }
 
   handleCardClick(card) {
-    this.setState({ selectedCardId: card.id, removalNotice: null });
+    // Selecting a card opens the detail modal and dismisses any
+    // pending remove confirmation, so an open confirmation can never
+    // retarget to a contact the user did not ask to remove.
+    this.setState({
+      selectedCardId: card.id,
+      removalNotice: null,
+      confirmingRemove: false,
+      detailModalOpen: true,
+    });
     this.handleClick(card.contact);
   }
 
@@ -163,6 +170,10 @@ export class Modal extends React.Component {
       ),
       selectedCardId: null,
       confirmingRemove: false,
+      // Close the detail modal: the contact it showed is gone, and
+      // with the modal closed, moving focus back to the grid no
+      // longer breaks the focus containment of an open dialog.
+      detailModalOpen: false,
       // Reset the detail view to the defaults so the removed
       // contact's data is no longer presented as current.
       ...DEFAULT_CONTACT,
@@ -264,8 +275,7 @@ export class Modal extends React.Component {
         key={ card.id }
         type="button"
         className="contact__card"
-        data-toggle="modal"
-        data-target=".contact-modal"
+        aria-label={ card.contact.name }
         onClick={ () => { this.handleCardClick(card); } }
       >{ card.initial } </button>);
 
@@ -287,13 +297,20 @@ export class Modal extends React.Component {
           <p className="contact__removal-notice" role="status">
             { this.state.removalNotice }
           </p> }
-        <div className="modal fade contact-modal" tabIndex="-1" role="dialog" aria-labelledby="contactName">
+        <div
+          className={ 'modal contact-modal' + (this.state.detailModalOpen ? ' show' : '') }
+          style={ { display: this.state.detailModalOpen ? 'block' : 'none' } }
+          tabIndex="-1"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="contactName"
+        >
           <div className="modal-dialog modal-lg">
             <div className="modal-content">
               <div className="modal-header">
                 <button className="btn"><i className="fa fa-edit"></i> Edit</button>
                 <button
-                  className="btn"
+                  className="btn btn--danger"
                   disabled={ !hasSelection }
                   onClick={ () => { this.handleRemoveRequest(); } }
                   ref={ this.setRemoveButtonRef }
@@ -358,41 +375,51 @@ export class Modal extends React.Component {
             </div>
           </div>
         </div>
-        { confirmingRemove &&
-          <div
-            className="modal fade confirm-modal show"
-            tabIndex="-1"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="confirmRemoveTitle"
-            ref={ this.setConfirmDialogRef }
-            onKeyDown={ (event) => { this.handleConfirmDialogKeyDown(event); } }
-          >
-            <div className="modal-dialog modal-dialog-centered">
-              <div className="modal-content">
-                <div className="modal-body">
-                  <h2 id="confirmRemoveTitle" className="confirm-modal__title">
-                    Remove contact
-                  </h2>
-                  <p>
-                    Remove { name } from your contacts? This cannot be undone.
-                  </p>
-                </div>
-                <div className="modal-footer">
-                  <button
-                    className="btn"
-                    onClick={ () => { this.handleRemoveCancel(); } }
-                    ref={ this.setCancelButtonRef }
-                  >Cancel</button>
-                  <button
-                    className="btn btn--danger"
-                    onClick={ () => { this.handleRemoveConfirm(); } }
-                  >Remove contact</button>
-                </div>
-              </div>
+        { this.state.detailModalOpen && <div className="modal-backdrop show" /> }
+        { confirmingRemove && this.renderConfirmDialog() }
+      </div>
+    );
+  }
+
+  // The remove-confirmation alertdialog, rendered while
+  // confirmingRemove is true. Its keyboard interaction lives in
+  // handleConfirmDialogKeyDown; the dialog is shown with an inline
+  // display style because Bootstrap's own modal JS never manages it.
+  renderConfirmDialog() {
+    return (
+      <div
+        className="modal fade confirm-modal show"
+        style={ { display: 'block' } }
+        tabIndex="-1"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirmRemoveTitle"
+        ref={ this.setConfirmDialogRef }
+        onKeyDown={ (event) => { this.handleConfirmDialogKeyDown(event); } }
+      >
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-body">
+              <h2 id="confirmRemoveTitle" className="confirm-modal__title">
+                Remove contact
+              </h2>
+              <p>
+                Remove { this.state.name } from your contacts? This cannot be undone.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn"
+                onClick={ () => { this.handleRemoveCancel(); } }
+                ref={ this.setCancelButtonRef }
+              >Cancel</button>
+              <button
+                className="btn btn--danger"
+                onClick={ () => { this.handleRemoveConfirm(); } }
+              >Remove contact</button>
             </div>
           </div>
-        }
+        </div>
       </div>
     );
   }
