@@ -190,6 +190,32 @@ describe('contact card interaction with the phone input', () => {
     expect(phoneInput).toHaveAttribute('aria-invalid', 'true');
     expect(getByText(/phone number can only contain/i)).toBeInTheDocument();
   });
+
+  test('applies the card phone again on the next card click after an edit', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const phoneInput = getByLabelText(/contact/i);
+
+    fireEvent.change(phoneInput, { target: { value: '555-1234' } });
+    fireEvent.click(getByText('A'));
+    expect(phoneInput.value).toBe('555-1234');
+
+    fireEvent.click(getByText('B'));
+    expect(phoneInput.value).toBe('9988776655');
+  });
+
+  test('protects a second in-progress edit after a card click reset the latch', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const phoneInput = getByLabelText(/contact/i);
+
+    fireEvent.change(phoneInput, { target: { value: '555-1234' } });
+    fireEvent.click(getByText('A'));
+    expect(phoneInput.value).toBe('555-1234');
+
+    fireEvent.change(phoneInput, { target: { value: '555-9876' } });
+    fireEvent.click(getByText('B'));
+
+    expect(phoneInput.value).toBe('555-9876');
+  });
 });
 
 describe('contact card interaction with the email input', () => {
@@ -227,6 +253,19 @@ describe('contact card interaction with the email input', () => {
   });
 });
 
+describe('modal dialog labeling', () => {
+  test('names the modal dialog via the contact-name heading', () => {
+    const { getByRole } = render(<App />);
+    // The modal markup is aria-hidden until Bootstrap shows it, so the
+    // role queries must include hidden elements.
+    const dialog = getByRole('dialog', { hidden: true });
+    const heading = getByRole('heading', { level: 1, hidden: true });
+
+    expect(heading).toHaveAttribute('id', 'contact-modal-title');
+    expect(dialog).toHaveAttribute('aria-labelledby', 'contact-modal-title');
+  });
+});
+
 describe('handleClick phone gate', () => {
   test('refuses an invalid phone passed to handleClick and keeps the current value', () => {
     let modal;
@@ -258,6 +297,20 @@ describe('handleClick phone gate', () => {
     act(() => { modal.handleClick({ phone: '+91 555 0100' }); });
 
     expect(phoneInput.value).toBe('555-1234');
+  });
+
+  test('applies a different passed phone on the click after an edit-time refusal', () => {
+    let modal;
+    const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
+    const phoneInput = getByLabelText(/contact/i);
+
+    fireEvent.change(phoneInput, { target: { value: '555-1234' } });
+    act(() => { modal.handleClick({ phone: '+91 555 0100' }); });
+    expect(phoneInput.value).toBe('555-1234');
+
+    act(() => { modal.handleClick({ phone: '+91 555 0199' }); });
+
+    expect(phoneInput.value).toBe('+91 555 0199');
   });
 });
 

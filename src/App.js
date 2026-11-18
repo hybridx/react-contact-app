@@ -63,6 +63,12 @@ export class Modal extends React.Component {
         email !== undefined && isValidEmail(email) && !prevState.emailEdited
           ? email
           : prevState.email,
+      // Reset the phone edit latch together with the card's fields so
+      // the next card click can apply its phone. The gate above still
+      // reads the pre-click flag, so a value the user is actively
+      // typing (the keystroke that armed the latch between clicks) is
+      // never clobbered by this click.
+      phoneEdited: false,
     }));
   }
 
@@ -100,15 +106,18 @@ renderModal() {
   return (
     <div className="contact">
       { names }
-      <div className="modal fade contact-modal" tabIndex="-1" role="dialog" aria-labelledby="contactModal" aria-hidden="true">
+      <div className="modal fade contact-modal" tabIndex="-1" role="dialog" aria-labelledby="contact-modal-title" aria-hidden="true">
         <div className="modal-dialog modal-lg">
           <div className="modal-content">
             <div className="modal-header">
               <button className="btn"><i className="fa fa-edit"></i> Edit</button> 
-              <button className="btn"><i className="far fa-trash-alt"></i> Remove</button>
+              {/* Removal is not implemented yet; keep the control
+                  disabled rather than offering a dead destructive
+                  action. */}
+              <button className="btn" disabled><i className="far fa-trash-alt"></i> Remove</button>
             </div>
             <div className="modal-body">
-              <h1>
+              <h1 id="contact-modal-title">
                 { name }
               </h1>
               <div className="contact-information">
