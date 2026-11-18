@@ -129,7 +129,21 @@ export class Modal extends React.Component {
     this.setState({ email: event.target.value, emailEdited: true });
   }
 
-  handleCardClick(card) {
+  // The address and birthday inputs are controlled so their displayed
+  // values follow the detail-view resets (after a removal or a modal
+  // close) instead of keeping whatever the user last typed.
+  handleAddressChange(event) {
+    this.setState({ address: event.target.value });
+  }
+
+  handleBirthdayChange(event) {
+    this.setState({ birthday: event.target.value });
+  }
+
+  handleCardClick(card, event) {
+    // Remember which card opened the dialog so focus can return to it
+    // when the detail modal is closed again.
+    this.openerCard = event ? event.currentTarget : null;
     // Selecting a card opens the detail modal and dismisses any
     // pending remove confirmation, so an open confirmation can never
     // retarget to a contact the user did not ask to remove.
@@ -138,8 +152,38 @@ export class Modal extends React.Component {
       removalNotice: null,
       confirmingRemove: false,
       detailModalOpen: true,
+    }, () => {
+      // Move focus into the dialog when it opens, so keyboard users
+      // are not left on the grid behind the modal backdrop.
+      this.focusDetailModal();
     });
     this.handleClick(card.contact);
+  }
+
+  // Close the detail modal without removing anything: any pending
+  // remove confirmation is dismissed, the detail view is reset to
+  // the defaults, and focus returns to the card that opened the
+  // dialog so the user can continue from where they left the grid.
+  handleDetailModalClose() {
+    this.setState({
+      detailModalOpen: false,
+      confirmingRemove: false,
+      selectedCardId: null,
+      ...DEFAULT_CONTACT,
+      phoneEdited: false,
+      emailEdited: false,
+    });
+    if (this.openerCard && document.contains(this.openerCard)) {
+      this.openerCard.focus();
+    }
+  }
+
+  // Move keyboard focus into the detail modal when it opens; the
+  // Close button is its first non-destructive control.
+  focusDetailModal() {
+    if (this.detailCloseButton) {
+      this.detailCloseButton.focus();
+    }
   }
 
   handleRemoveRequest() {
@@ -228,6 +272,14 @@ export class Modal extends React.Component {
     this.confirmDialog = dialog;
   };
 
+  setDetailModalRef = (dialog) => {
+    this.detailModal = dialog;
+  };
+
+  setDetailCloseButtonRef = (button) => {
+    this.detailCloseButton = button;
+  };
+
   setCancelButtonRef = (button) => {
     this.cancelButton = button;
     // Move focus into the dialog as soon as it opens.
@@ -235,6 +287,31 @@ export class Modal extends React.Component {
       button.focus();
     }
   };
+
+  // Keep Tab (and Shift+Tab) cycling inside a dialog instead of
+  // reaching the content behind aria-modal. The dialog container
+  // itself is focusable (tabIndex="-1"); treat it as the first tab
+  // stop so Shift+Tab from it wraps to the last focusable element
+  // instead of escaping to the page behind.
+  trapTabIn(container, event) {
+    const focusable = container
+      ? container.querySelectorAll('button, input, select, textarea, a[href]')
+      : [];
+    if (focusable.length === 0) {
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey &&
+        (document.activeElement === first ||
+         document.activeElement === container)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
 
   // Keyboard interaction for the confirmation dialog: Escape cancels,
   // and Tab cycles within the dialog instead of reaching the content
@@ -246,26 +323,26 @@ export class Modal extends React.Component {
       return;
     }
     if (event.key === 'Tab') {
-      const focusable = this.confirmDialog
-        ? this.confirmDialog.querySelectorAll('button')
-        : [];
-      if (focusable.length === 0) {
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      // The dialog container itself is focusable (tabIndex="-1");
-      // treat it as the first focusable so Shift+Tab from it wraps to
-      // the last button instead of escaping to the page behind.
-      if (event.shiftKey &&
-          (document.activeElement === first ||
-           document.activeElement === this.confirmDialog)) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
+      this.trapTabIn(this.confirmDialog, event);
+    }
+  }
+
+  // Keyboard interaction for the detail modal: Escape closes it
+  // without removing anything, and Tab stays inside the modal. While
+  // the remove-confirmation dialog is open it handles its own
+  // keyboard interaction — focus is inside it, so this handler is
+  // not reached; the guard keeps the two dialogs from ever racing.
+  handleDetailModalKeyDown(event) {
+    if (this.state.confirmingRemove) {
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.handleDetailModalClose();
+      return;
+    }
+    if (event.key === 'Tab') {
+      this.trapTabIn(this.detailModal, event);
     }
   }
 
@@ -275,8 +352,8 @@ export class Modal extends React.Component {
         key={ card.id }
         type="button"
         className="contact__card"
-        aria-label={ card.contact.name }
-        onClick={ () => { this.handleCardClick(card); } }
+        aria-label={ `${card.contact.name}, contact ${card.initial}` }
+        onClick={ (event) => { this.handleCardClick(card, event); } }
       >{ card.initial } </button>);
 
     const name = this.state.name;
@@ -304,6 +381,8 @@ export class Modal extends React.Component {
           role="dialog"
           aria-modal="true"
           aria-labelledby="contactName"
+          ref={ this.setDetailModalRef }
+          onKeyDown={ (event) => { this.handleDetailModalKeyDown(event); } }
         >
           <div className="modal-dialog modal-lg">
             <div className="modal-content">
@@ -315,6 +394,11 @@ export class Modal extends React.Component {
                   onClick={ () => { this.handleRemoveRequest(); } }
                   ref={ this.setRemoveButtonRef }
                 ><i className="far fa-trash-alt"></i> Remove</button>
+                <button
+                  className="btn"
+                  onClick={ () => { this.handleDetailModalClose(); } }
+                  ref={ this.setDetailCloseButtonRef }
+                ><i className="fa fa-times"></i> Close</button>
               </div>
               <div className="modal-body">
                 <h1 id="contactName">
@@ -340,19 +424,19 @@ export class Modal extends React.Component {
                     }
                   </div>
                   <div className="contact-information__item">
-                    <label htmlFor="contact">
-                      Contact
+                    <label htmlFor="phone">
+                      Phone
                     </label>
                     <input
                       type="tel"
-                      id="contact"
+                      id="phone"
                       value={ phone }
                       onChange={ (event) => this.handlePhoneChange(event) }
                       aria-invalid={ isPhoneInvalid }
-                      aria-errormessage={ isPhoneInvalid ? 'contact-error' : undefined }
+                      aria-errormessage={ isPhoneInvalid ? 'phone-error' : undefined }
                     />
                     { isPhoneInvalid &&
-                      <span id="contact-error" className="contact-information__error" role="status">
+                      <span id="phone-error" className="contact-information__error" role="status">
                         Phone number can only contain digits, spaces and the
                         separators + - ( )
                       </span>
@@ -362,20 +446,34 @@ export class Modal extends React.Component {
                     <label htmlFor="address">
                       Address
                     </label>
-                    <input type="text" id="address" defaultValue={ address }/>
+                    <input
+                      type="text"
+                      id="address"
+                      value={ address }
+                      onChange={ (event) => this.handleAddressChange(event) }
+                    />
                   </div>
                   <div className="contact-information__item">
                     <label htmlFor="date">
                       Birthday
                     </label>
-                    <input type="date" id="date" defaultValue={ birthday }/>
+                    <input
+                      type="date"
+                      id="date"
+                      value={ birthday }
+                      onChange={ (event) => this.handleBirthdayChange(event) }
+                    />
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-        { this.state.detailModalOpen && <div className="modal-backdrop show" /> }
+        { this.state.detailModalOpen &&
+          <div
+            className="modal-backdrop show"
+            onClick={ () => { this.handleDetailModalClose(); } }
+          /> }
         { confirmingRemove && this.renderConfirmDialog() }
       </div>
     );

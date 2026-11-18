@@ -4,6 +4,7 @@ body {
 
 :root {
   --danger: #b00020;
+  --muted: #535353;
 }
 
 .contact {
@@ -46,14 +47,14 @@ body {
   width: 100%;
   margin: 3rem 1rem;
   text-align: center;
-  color: #535353;
+  color: var(--muted);
   font-size: 1.25rem;
 }
 
 .contact__removal-notice {
   width: 100%;
   margin: 0 1rem;
-  color: #535353;
+  color: var(--muted);
   font-size: 0.9rem;
 }
 
@@ -63,7 +64,7 @@ body {
 }
 
 .modal-header button.btn {
-  color: #535353;
+  color: var(--muted);
 }
 
 .modal-header button.btn:disabled {
@@ -109,8 +110,9 @@ body {
   margin-left: 1rem;
 }
 
-/* Destructive actions and error text share the danger color declared
-   as --danger above. */
+/* Destructive actions and error text share the danger color, and
+   secondary text shares the muted gray; both are declared on :root
+   above. */
 .btn--danger {
   color: var(--danger);
 }

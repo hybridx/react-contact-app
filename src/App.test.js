@@ -64,7 +64,7 @@ describe('isValidEmail', () => {
 describe('phone input validation', () => {
   test('shows an inline error for an invalid phone value and keeps the value', () => {
     const { getByLabelText, getByText } = render(<App />);
-    const phoneInput = getByLabelText(/contact/i);
+    const phoneInput = getByLabelText(/phone/i);
 
     fireEvent.change(phoneInput, { target: { value: 'abc123' } });
 
@@ -75,19 +75,19 @@ describe('phone input validation', () => {
 
   test('associates the inline error with the phone input as polite feedback', () => {
     const { getByLabelText, getByText } = render(<App />);
-    const phoneInput = getByLabelText(/contact/i);
+    const phoneInput = getByLabelText(/phone/i);
 
     fireEvent.change(phoneInput, { target: { value: 'abc123' } });
 
-    expect(phoneInput).toHaveAttribute('aria-errormessage', 'contact-error');
+    expect(phoneInput).toHaveAttribute('aria-errormessage', 'phone-error');
     const error = getByText(/phone number can only contain/i);
-    expect(error).toHaveAttribute('id', 'contact-error');
+    expect(error).toHaveAttribute('id', 'phone-error');
     expect(error).toHaveAttribute('role', 'status');
   });
 
   test('clears the inline error once the value is fixed', () => {
     const { getByLabelText, queryByText } = render(<App />);
-    const phoneInput = getByLabelText(/contact/i);
+    const phoneInput = getByLabelText(/phone/i);
 
     fireEvent.change(phoneInput, { target: { value: 'abc123' } });
     expect(queryByText(/phone number can only contain/i)).toBeInTheDocument();
@@ -99,7 +99,7 @@ describe('phone input validation', () => {
 
   test('accepts a formatted phone number without showing an error', () => {
     const { getByLabelText, queryByText } = render(<App />);
-    const phoneInput = getByLabelText(/contact/i);
+    const phoneInput = getByLabelText(/phone/i);
 
     fireEvent.change(phoneInput, { target: { value: '+91 99887 76655' } });
 
@@ -170,7 +170,7 @@ describe('email input validation', () => {
 describe('contact card interaction with the phone input', () => {
   test('clicking a contact card does not clobber the phone value being edited', () => {
     const { getByLabelText, getByText } = render(<App />);
-    const phoneInput = getByLabelText(/contact/i);
+    const phoneInput = getByLabelText(/phone/i);
 
     fireEvent.change(phoneInput, { target: { value: '+91 99887 76655' } });
     fireEvent.click(getByText('A'));
@@ -181,7 +181,7 @@ describe('contact card interaction with the phone input', () => {
 
   test('clicking a contact card keeps an invalid phone value and its error', () => {
     const { getByLabelText, getByText } = render(<App />);
-    const phoneInput = getByLabelText(/contact/i);
+    const phoneInput = getByLabelText(/phone/i);
 
     fireEvent.change(phoneInput, { target: { value: 'abc123' } });
     fireEvent.click(getByText('B'));
@@ -491,16 +491,42 @@ describe('remove confirmation', () => {
     expect(getByText('Remove')).toHaveFocus();
   });
 
-  test('clicking another card dismisses an open confirmation dialog', () => {
+  test('a canceled confirmation followed by another card removes only the new selection', () => {
     const { getByText, getByRole, queryByRole, queryByText } = render(<App />);
 
     fireEvent.click(getByText('A'));
     fireEvent.click(getByText('Remove'));
     expect(getByRole('alertdialog')).toBeInTheDocument();
 
-    // A pending confirmation cannot retarget to a different contact:
-    // the card click dismisses it, and the next confirmation applies
-    // to the newly selected card only.
+    // Dismiss the confirmation through channels that work at
+    // runtime: Escape cancels the confirmation dialog, then Escape
+    // closes the detail modal, so the grid is reachable again.
+    fireEvent.keyDown(getByRole('alertdialog'), { key: 'Escape' });
+    expect(queryByRole('alertdialog')).not.toBeInTheDocument();
+    fireEvent.keyDown(getByRole('dialog'), { key: 'Escape' });
+    expect(queryByRole('dialog')).not.toBeInTheDocument();
+
+    // The next removal applies to the newly selected contact only.
+    fireEvent.click(getByText('B'));
+    fireEvent.click(getByText('Remove'));
+    fireEvent.click(getByRole('button', { name: 'Remove contact' }));
+
+    expect(queryByText('B')).not.toBeInTheDocument();
+    expect(getByText('A')).toBeInTheDocument();
+  });
+
+  test('activating another card dismisses an open confirmation (no Bootstrap CSS)', () => {
+    const { getByText, getByRole, queryByRole, queryByText } = render(<App />);
+
+    fireEvent.click(getByText('A'));
+    fireEvent.click(getByText('Remove'));
+    expect(getByRole('alertdialog')).toBeInTheDocument();
+
+    // The backdrop that normally blocks grid clicks comes from
+    // Bootstrap's CSS; when it fails to load, clicks reach the cards
+    // again. handleCardClick still guards that environment: the card
+    // click dismisses the pending confirmation, so it can never
+    // retarget to a contact the user did not ask to remove.
     fireEvent.click(getByText('B'));
     expect(queryByRole('alertdialog')).not.toBeInTheDocument();
 
@@ -511,7 +537,7 @@ describe('remove confirmation', () => {
     expect(getByText('A')).toBeInTheDocument();
   });
 
-  test("clicking a card after a confirmed removal applies that contact's details", () => {
+  test('clicking a card after a confirmed removal applies the new contact details', () => {
     const { getByLabelText, getByText, getByRole } = render(<App />);
 
     fireEvent.click(getByText('E'));
@@ -524,7 +550,27 @@ describe('remove confirmation', () => {
 
     expect(getByRole('dialog')).toHaveClass('show');
     expect(getByLabelText(/email/i).value).toBe('denair@redhat.com');
-    expect(getByLabelText(/contact/i).value).toBe('9988776655');
+    expect(getByLabelText(/phone/i).value).toBe('9988776655');
+  });
+
+  test('a custom address and birthday are reset after a confirmed removal', () => {
+    const { getByLabelText, getByText, getByRole } = render(<App />);
+
+    fireEvent.click(getByText('E'));
+    const addressInput = getByLabelText(/address/i);
+    const birthdayInput = getByLabelText(/birthday/i);
+
+    fireEvent.change(addressInput, { target: { value: 'Custom 123' } });
+    fireEvent.change(birthdayInput, { target: { value: '2001-02-03' } });
+    expect(addressInput.value).toBe('Custom 123');
+
+    fireEvent.click(getByText('Remove'));
+    fireEvent.click(getByRole('button', { name: 'Remove contact' }));
+
+    // The inputs are controlled, so the reset to the defaults is
+    // reflected in the displayed values.
+    expect(addressInput.value).toBe('JDoe 1120');
+    expect(birthdayInput.value).not.toBe('2001-02-03');
   });
 
   test('shows an empty state once every contact has been removed', () => {
@@ -543,14 +589,89 @@ describe('remove confirmation', () => {
 });
 
 describe('contact card accessibility', () => {
-  test('cards expose the full contact name as their accessible name', () => {
+  test('cards expose a unique accessible name per contact', () => {
     const { container } = render(<App />);
 
     const cards = container.querySelectorAll('.contact__card');
     expect(cards).toHaveLength(10);
-    cards.forEach((card) => {
-      expect(card).toHaveAttribute('aria-label', 'Deepesh Nair');
+    const initials = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+    cards.forEach((card, index) => {
+      // The name includes the distinguishing initial, so ten cards
+      // sharing one demo record are still told apart (WCAG 4.1.2).
+      expect(card).toHaveAttribute(
+        'aria-label', 'Deepesh Nair, contact ' + initials[index]
+      );
     });
+  });
+});
+
+describe('detail modal interaction', () => {
+  test('the detail modal can be closed without removing the contact', () => {
+    const { getByText, getByRole, queryByRole } = render(<App />);
+
+    fireEvent.click(getByText('A'));
+    expect(getByRole('dialog')).toHaveClass('show');
+
+    fireEvent.click(getByRole('button', { name: 'Close' }));
+
+    expect(queryByRole('dialog')).not.toBeInTheDocument();
+    expect(getByText('A')).toBeInTheDocument();
+    // With the modal closed the selection is cleared, so Remove can
+    // no longer be triggered.
+    expect(getByText('Remove')).toBeDisabled();
+  });
+
+  test('opening the detail modal moves focus in and closing returns it to the card', () => {
+    const { getByText, getByRole } = render(<App />);
+
+    fireEvent.click(getByText('A'));
+
+    // Focus moves into the dialog when it opens.
+    expect(getByRole('button', { name: 'Close' })).toHaveFocus();
+
+    fireEvent.click(getByRole('button', { name: 'Close' }));
+
+    expect(getByText('A')).toHaveFocus();
+  });
+
+  test('Escape closes the detail modal and returns focus to the opening card', () => {
+    const { getByText, getByRole, queryByRole } = render(<App />);
+
+    fireEvent.click(getByText('B'));
+    fireEvent.keyDown(getByRole('dialog'), { key: 'Escape' });
+
+    expect(queryByRole('dialog')).not.toBeInTheDocument();
+    expect(getByText('B')).toHaveFocus();
+  });
+
+  test('clicking the backdrop closes the detail modal', () => {
+    const { getByText, queryByRole, container } = render(<App />);
+
+    fireEvent.click(getByText('C'));
+
+    fireEvent.click(container.querySelector('.modal-backdrop'));
+
+    expect(queryByRole('dialog')).not.toBeInTheDocument();
+    expect(getByText('C')).toBeInTheDocument();
+  });
+
+  test('the detail modal traps Tab while it is open', () => {
+    const { getByText, getByRole, getByLabelText } = render(<App />);
+
+    fireEvent.click(getByText('D'));
+    const dialog = getByRole('dialog');
+    const editButton = getByRole('button', { name: 'Edit' });
+    const birthdayInput = getByLabelText(/birthday/i);
+
+    // Tab from the last focusable element wraps to the first.
+    birthdayInput.focus();
+    fireEvent.keyDown(dialog, { key: 'Tab' });
+    expect(editButton).toHaveFocus();
+
+    // Shift+Tab from the first focusable element wraps to the last.
+    editButton.focus();
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
+    expect(birthdayInput).toHaveFocus();
   });
 });
 
@@ -558,7 +679,7 @@ describe('handleClick phone gate', () => {
   test('refuses an invalid phone passed to handleClick and keeps the current value', () => {
     let modal;
     const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
-    const phoneInput = getByLabelText(/contact/i);
+    const phoneInput = getByLabelText(/phone/i);
     expect(phoneInput.value).toBe('9988776655');
 
     act(() => { modal.handleClick({ phone: 'abc123' }); });
@@ -569,7 +690,7 @@ describe('handleClick phone gate', () => {
   test('applies a valid phone passed to handleClick while the field is unedited', () => {
     let modal;
     const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
-    const phoneInput = getByLabelText(/contact/i);
+    const phoneInput = getByLabelText(/phone/i);
 
     act(() => { modal.handleClick({ phone: '+91 555 0100' }); });
 
@@ -579,7 +700,7 @@ describe('handleClick phone gate', () => {
   test('never applies a passed phone once the user has edited the field', () => {
     let modal;
     const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
-    const phoneInput = getByLabelText(/contact/i);
+    const phoneInput = getByLabelText(/phone/i);
 
     fireEvent.change(phoneInput, { target: { value: '555-1234' } });
     act(() => { modal.handleClick({ phone: '+91 555 0100' }); });
