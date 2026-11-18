@@ -107,8 +107,11 @@ implementation PRs, reviews them and applies fixes, all from GitHub events.
 The fullsend configuration lives in [`.fullsend/config.yaml`](.fullsend/config.yaml)
 and defines:
 
-- **Tracker** — `tracker.github.allowed_targets`, the repository allow-list
-  from the tracker configuration.
+- **Tracker** — `tracker.github.allowed_targets`, the GitHub repositories
+  and organizations where agents may create issues beyond this repository.
+  It does not restrict where the automation itself runs: agents can always
+  create issues in the repository they run in, and the allow-list only
+  extends issue creation to the listed targets.
 - **Runtime** — the agent runtime (`pi`).
 - **Roles** — the enabled agent roles: `triage`, `coder`, `review`, `fix`,
   `retro` and `prioritize`.
