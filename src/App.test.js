@@ -2,6 +2,24 @@ import React from 'react';
 import { render, fireEvent } from '@testing-library/react';
 import { act } from 'react-dom/test-utils';
 import App, { isValidEmail, isValidPhone, Modal } from './App';
+import { STORAGE_KEY, loadContacts, saveContacts } from './contactsStorage';
+
+function fakeStorage(initial) {
+  const store = { ...initial };
+  return {
+    getItem: (key) => (key in store ? store[key] : null),
+    setItem: (key, value) => { store[key] = String(value); },
+    removeItem: (key) => { delete store[key]; },
+  };
+}
+
+// The contact list persists in localStorage, so a test that adds or
+// removes a contact would leak into every later render in this file.
+// Clear the storage before each test so all suites start from the
+// demo contacts.
+beforeEach(() => {
+  window.localStorage.clear();
+});
 
 describe('isValidPhone', () => {
   test('accepts digit-only phone numbers', () => {
@@ -672,6 +690,123 @@ describe('detail modal interaction', () => {
     editButton.focus();
     fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
     expect(birthdayInput).toHaveFocus();
+  });
+});
+
+describe('contacts storage helpers', () => {
+  test('loadContacts returns null when nothing has been persisted', () => {
+    expect(loadContacts(fakeStorage())).toBeNull();
+  });
+
+  test('saveContacts and loadContacts round-trip a contact list', () => {
+    const storage = fakeStorage();
+    const contacts = [
+      { id: 'a', label: 'A', name: 'Jane Roe', email: 'jane@example.com' },
+    ];
+
+    saveContacts(contacts, storage);
+
+    expect(storage.getItem(STORAGE_KEY)).toBe(JSON.stringify(contacts));
+    expect(loadContacts(storage)).toEqual(contacts);
+  });
+
+  test('loadContacts returns null for unreadable or non-list data', () => {
+    expect(loadContacts(fakeStorage({ [STORAGE_KEY]: 'not json' }))).toBeNull();
+    expect(loadContacts(fakeStorage({ [STORAGE_KEY]: '{"a":1}' }))).toBeNull();
+  });
+
+  test('saveContacts keeps going when the storage write fails', () => {
+    const storage = {
+      getItem: () => null,
+      setItem: () => { throw new Error('quota exceeded'); },
+      removeItem: () => {},
+    };
+
+    expect(() => saveContacts([], storage)).not.toThrow();
+  });
+});
+
+describe('contact list persistence', () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  test('shows the demo contacts when nothing has been persisted', () => {
+    const { getByText, getAllByTitle } = render(<App />);
+
+    expect(getByText('A')).toBeInTheDocument();
+    expect(getByText('J')).toBeInTheDocument();
+    expect(getAllByTitle('Deepesh Nair')).toHaveLength(10);
+  });
+
+  test('restores the contact list from localStorage instead of the demo list', () => {
+    saveContacts([
+      { id: 'zed', label: 'Z', name: 'Zed Zane', email: 'zed@example.com',
+        phone: '555-0100', address: '1 Main St', birthday: '2000-01-01' },
+    ]);
+
+    const { getByText, getByTitle, queryByTitle } = render(<App />);
+
+    expect(getByText('Z')).toBeInTheDocument();
+    expect(getByTitle('Zed Zane')).toBeInTheDocument();
+    expect(queryByTitle('Deepesh Nair')).toBeNull();
+  });
+
+  test('clicking Add Contact appends the current contact and persists it', () => {
+    const { getByLabelText, getByText, getByTitle } = render(<App />);
+
+    fireEvent.change(getByLabelText(/name/i), { target: { value: 'Jane Roe' } });
+    fireEvent.change(getByLabelText(/email/i), { target: { value: 'jane@example.com' } });
+    fireEvent.click(getByText('Add Contact'));
+
+    expect(getByTitle('Jane Roe')).toBeInTheDocument();
+    const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY));
+    expect(stored).toHaveLength(11);
+    expect(stored[10]).toMatchObject({
+      name: 'Jane Roe',
+      email: 'jane@example.com',
+      phone: '9988776655',
+    });
+  });
+
+  test('an added contact is still listed after remounting the app', () => {
+    const first = render(<App />);
+    fireEvent.change(first.getByLabelText(/name/i), { target: { value: 'Jane Roe' } });
+    fireEvent.click(first.getByText('Add Contact'));
+    first.unmount();
+
+    const second = render(<App />);
+    const restored = second.getByTitle('Jane Roe');
+    expect(restored).toBeInTheDocument();
+
+    fireEvent.click(restored);
+    expect(second.getByLabelText(/name/i).value).toBe('Jane Roe');
+    expect(second.getByLabelText(/email/i).value).toBe('jdoe@redhat.com');
+  });
+
+  test('Add Contact refuses to persist an invalid email or phone value', () => {
+    const { getByLabelText, getByText, queryByTitle } = render(<App />);
+
+    fireEvent.change(getByLabelText(/email/i), { target: { value: 'foo@bar' } });
+    fireEvent.click(getByText('Add Contact'));
+
+    expect(queryByTitle('John Doe')).toBeNull();
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  test('card clicks load the values of a restored contact', () => {
+    saveContacts([
+      { id: 'zed', label: 'Z', name: 'Zed Zane', email: 'zed@example.com',
+        phone: '+91 99887 76655', address: '1 Main St', birthday: '2000-01-01' },
+    ]);
+
+    const { getByText, getByLabelText } = render(<App />);
+
+    fireEvent.click(getByText('Z'));
+
+    expect(getByLabelText(/name/i).value).toBe('Zed Zane');
+    expect(getByLabelText(/email/i).value).toBe('zed@example.com');
+    expect(getByLabelText(/phone/i).value).toBe('+91 99887 76655');
   });
 });
 
