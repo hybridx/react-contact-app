@@ -64,8 +64,8 @@ describe('isValidEmail', () => {
 describe('phone input validation', () => {
   test('shows an inline error for an invalid phone value and keeps the value', () => {
     const { getByLabelText, getByText } = render(<App />);
-    // Exact match: the contact cards also expose aria-labels ("Contact A",
-    // ...) which a substring regex would also match.
+    // Exact match: the contact cards also expose aria-labels ("Contact A:
+    // ...", ...) which a substring regex would also match.
     const phoneInput = getByLabelText('Contact');
 
     fireEvent.change(phoneInput, { target: { value: 'abc123' } });
@@ -220,20 +220,38 @@ describe('contact card interaction with the phone input', () => {
   });
 
   test('supports activating a contact card with the keyboard (Enter and Space)', () => {
-    const { getByLabelText, getByText } = render(<App />);
-    const phoneInput = getByLabelText('Contact');
-    const card = getByText('A');
+    // Bootstrap and jQuery are not loaded in the test runtime, so the
+    // dialog cannot really open here; a jQuery stub captures the
+    // explicit show the activation path must perform for keyboard
+    // users, because Bootstrap's data-toggle only fires on mouse
+    // clicks.
+    const modalStub = { modal: jest.fn() };
+    const jQueryStub = jest.fn(() => modalStub);
+    const originalJQuery = window.jQuery;
+    window.jQuery = jQueryStub;
 
-    expect(card).toHaveAttribute('role', 'button');
-    expect(card).toHaveAttribute('tabIndex', '0');
-    expect(card).toHaveAttribute('aria-label', 'Contact A');
+    try {
+      const { getByLabelText, getByText } = render(<App />);
+      const phoneInput = getByLabelText('Contact');
+      const card = getByText('A');
 
-    fireEvent.change(phoneInput, { target: { value: '555-1234' } });
-    fireEvent.keyDown(card, { key: 'Enter' });
-    expect(phoneInput.value).toBe('555-1234');
+      expect(card).toHaveAttribute('role', 'button');
+      expect(card).toHaveAttribute('tabIndex', '0');
+      expect(card).toHaveAttribute('aria-label', 'Contact A: Deepesh Nair');
 
-    fireEvent.keyDown(getByText('B'), { key: ' ' });
-    expect(phoneInput.value).toBe('9988776655');
+      fireEvent.change(phoneInput, { target: { value: '555-1234' } });
+      fireEvent.keyDown(card, { key: 'Enter' });
+      expect(phoneInput.value).toBe('555-1234');
+      expect(jQueryStub).toHaveBeenCalledWith('.contact-modal');
+      expect(modalStub.modal).toHaveBeenCalledWith('show');
+
+      fireEvent.keyDown(getByText('B'), { key: ' ' });
+      expect(phoneInput.value).toBe('9988776655');
+      expect(jQueryStub).toHaveBeenLastCalledWith('.contact-modal');
+      expect(modalStub.modal).toHaveBeenLastCalledWith('show');
+    } finally {
+      window.jQuery = originalJQuery;
+    }
   });
 
   test('names the modal dialog via the contact-name heading', () => {
@@ -243,8 +261,8 @@ describe('contact card interaction with the phone input', () => {
     const dialog = getByRole('dialog', { hidden: true });
     const heading = getByRole('heading', { level: 1, hidden: true });
 
-    expect(heading).toHaveAttribute('id', 'contactModal');
-    expect(dialog).toHaveAttribute('aria-labelledby', 'contactModal');
+    expect(heading).toHaveAttribute('id', 'contact-modal-title');
+    expect(dialog).toHaveAttribute('aria-labelledby', 'contact-modal-title');
   });
 });
 
@@ -280,6 +298,18 @@ describe('contact card interaction with the email input', () => {
     expect(emailInput.value).toBe('foo@bar');
     expect(emailInput).toHaveAttribute('aria-invalid', 'true');
     expect(getByText(/enter a valid email address/i)).toBeInTheDocument();
+  });
+
+  test('applies the card email again on the next card click after an edit', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
+    fireEvent.click(getByText('A'));
+    expect(emailInput.value).toBe('test@example.com');
+
+    fireEvent.click(getByText('B'));
+    expect(emailInput.value).toBe('denair@redhat.com');
   });
 });
 

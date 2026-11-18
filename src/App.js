@@ -31,6 +31,17 @@ export function isValidEmail(value) {
   return !domain.includes('..') && !domain.endsWith('.');
 }
 
+// The single demo contact every card opens in the modal. The cards
+// currently share one contact, so both the activation data and the
+// cards' accessible names come from this constant.
+const CONTACT = {
+  name: 'Deepesh Nair',
+  email: 'denair@redhat.com',
+  phone: '9988776655',
+  address: 'JDoe 1120',
+  birthday: '11-1-2020',
+};
+
 export class Modal extends React.Component {
   constructor(props) {
     super(props);
@@ -82,13 +93,18 @@ export class Modal extends React.Component {
   }
 
   handleCardActivate() {
-    this.handleClick({
-      name: 'Deepesh Nair',
-      email: 'denair@redhat.com',
-      phone: '9988776655',
-      address: 'JDoe 1120',
-      birthday: '11-1-2020',
-    });
+    this.handleClick(CONTACT);
+    // Bootstrap's `data-toggle="modal"` delegation only fires on real
+    // mouse clicks, so an Enter/Space activation never reaches it and
+    // the dialog would not open for keyboard users. Show it explicitly
+    // here; jQuery and Bootstrap are loaded globally by
+    // public/index.html, and Bootstrap ignores a redundant show when
+    // the dialog is already open or opening (e.g. after a mouse click).
+    // The guard keeps jQuery-less environments (the test runtime)
+    // working.
+    if (typeof window !== 'undefined' && window.jQuery) {
+      window.jQuery('.contact-modal').modal('show');
+    }
   }
 
   handleCardKeyDown(event) {
@@ -104,7 +120,7 @@ renderModal() {
   const names = [
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
   ].map( (initial, i) => <div key={i} className="contact__card" data-toggle="modal" data-target=".contact-modal"
-                           role="button" tabIndex={0} aria-label={ `Contact ${initial}` }
+                           role="button" tabIndex={0} aria-label={ `Contact ${initial}: ${CONTACT.name}` }
                            onClick={ () => { this.handleCardActivate(); } }
                            onKeyDown={ (event) => { this.handleCardKeyDown(event); } }>{initial} </div>);
   
@@ -118,15 +134,18 @@ renderModal() {
   return (
     <div className="contact">
       { names }
-      <div className="modal fade contact-modal" tabIndex="-1" role="dialog" aria-labelledby="contactModal" aria-hidden="true">
+      <div className="modal fade contact-modal" tabIndex="-1" role="dialog" aria-labelledby="contact-modal-title" aria-hidden="true">
         <div className="modal-dialog modal-lg">
           <div className="modal-content">
             <div className="modal-header">
               <button className="btn"><i className="fa fa-edit" aria-hidden="true"></i> Edit</button> 
-              <button className="btn"><i className="far fa-trash-alt" aria-hidden="true"></i> Remove</button>
+              {/* Removal is not implemented yet; keep the control
+                  disabled rather than offering a dead destructive
+                  action. */}
+              <button className="btn" disabled><i className="far fa-trash-alt" aria-hidden="true"></i> Remove</button>
             </div>
             <div className="modal-body">
-              <h1 id="contactModal">
+              <h1 id="contact-modal-title">
                 { name }
               </h1>
               <div className="contact-information">
