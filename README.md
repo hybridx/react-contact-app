@@ -48,7 +48,7 @@ Launches the test runner in the interactive watch mode.<br />
 See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests)
 for more information.
 
-To run the suite once (as CI does):
+To run the suite once:
 
 ```sh
 CI=true npm test
@@ -90,8 +90,10 @@ feature.
 ## Deployment
 
 Pushes to the `develop` branch run the CI workflow in
-`.github/workflows/nodejs.yml`, which installs dependencies, runs the tests,
-builds the app and deploys the `build` folder to GitHub Pages.
+`.github/workflows/nodejs.yml`, which installs dependencies, builds the app
+and deploys the `build` folder to GitHub Pages. The workflow does not yet
+run the tests — its intended Test step is malformed (see #29) — so run the
+suite locally before pushing.
 
 ## Fullsend configuration for GitHub
 
@@ -105,8 +107,8 @@ implementation PRs, reviews them and applies fixes, all from GitHub events.
 The fullsend configuration lives in [`.fullsend/config.yaml`](.fullsend/config.yaml)
 and defines:
 
-- **Tracker** — `tracker.github.allowed_targets` restricts which repositories
-  the automation may act on.
+- **Tracker** — `tracker.github.allowed_targets`, the repository allow-list
+  from the tracker configuration.
 - **Runtime** — the agent runtime (`pi`).
 - **Roles** — the enabled agent roles: `triage`, `coder`, `review`, `fix`,
   `retro` and `prioritize`.
@@ -156,8 +158,8 @@ directly) wire the configuration to GitHub:
   shim workflow. It listens to issue events (opened, edited, labeled), issue
   comments, `pull_request_target` and pull request reviews, and forwards them
   to fullsend's reusable dispatch workflow, which decides which agent role
-  runs. It never checks out pull-request code, so forks cannot use it to
-  exfiltrate credentials.
+  runs. It does not check out pull-request code, which limits the risk of
+  "pwn request" style credential exfiltration from fork PRs.
 - [`.github/workflows/prioritize.yml`](.github/workflows/prioritize.yml) —
   runs the `prioritize` role to score and order work items.
 
