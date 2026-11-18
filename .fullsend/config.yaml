@@ -25,6 +25,20 @@ agents:
       model: gateway/rits/zai-org/glm-5-3
     - name: review
       model: gateway/rits/zai-org/glm-5-3
+      subagents:
+          # Map each pr-review persona away from its frontmatter default
+          # (model: opus, which resolves to the unavailable anthropic-vertex
+          # provider) to the model this run actually serves (ADR 104).
+          correctness: gateway/rits/zai-org/glm-5-3
+          security: gateway/rits/zai-org/glm-5-3
+          security-triage: gateway/rits/zai-org/glm-5-3
+          style-conventions: gateway/rits/zai-org/glm-5-3
+          intent-coherence: gateway/rits/zai-org/glm-5-3
+          docs-currency: gateway/rits/zai-org/glm-5-3
+          cross-repo-contracts: gateway/rits/zai-org/glm-5-3
+          challenger: gateway/rits/zai-org/glm-5-3
+          risk-assessment: gateway/rits/zai-org/glm-5-3
+          user-experience: gateway/rits/zai-org/glm-5-3
     - name: fix
       model: gateway/rits/zai-org/glm-5-3
     - name: retro
