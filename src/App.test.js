@@ -64,48 +64,46 @@ describe('isValidEmail', () => {
 describe('phone input validation', () => {
   test('shows an inline error for an invalid phone value and keeps the value', () => {
     const { getByLabelText, getByText } = render(<App />);
-    // Exact match: the contact cards also expose aria-labels ("Contact A:
-    // ...", ...) which a substring regex would also match.
-    const phoneInput = getByLabelText('Contact');
+    const phoneInput = getByLabelText(/contact/i);
 
     fireEvent.change(phoneInput, { target: { value: 'abc123' } });
 
     expect(phoneInput.value).toBe('abc123');
     expect(phoneInput).toHaveAttribute('aria-invalid', 'true');
-    expect(getByText(/contact number can only contain/i)).toBeInTheDocument();
+    expect(getByText(/phone number can only contain/i)).toBeInTheDocument();
   });
 
   test('associates the inline error with the phone input as polite feedback', () => {
     const { getByLabelText, getByText } = render(<App />);
-    const phoneInput = getByLabelText('Contact');
+    const phoneInput = getByLabelText(/contact/i);
 
     fireEvent.change(phoneInput, { target: { value: 'abc123' } });
 
     expect(phoneInput).toHaveAttribute('aria-errormessage', 'contact-error');
-    const error = getByText(/contact number can only contain/i);
+    const error = getByText(/phone number can only contain/i);
     expect(error).toHaveAttribute('id', 'contact-error');
     expect(error).toHaveAttribute('role', 'status');
   });
 
   test('clears the inline error once the value is fixed', () => {
     const { getByLabelText, queryByText } = render(<App />);
-    const phoneInput = getByLabelText('Contact');
+    const phoneInput = getByLabelText(/contact/i);
 
     fireEvent.change(phoneInput, { target: { value: 'abc123' } });
-    expect(queryByText(/contact number can only contain/i)).toBeInTheDocument();
+    expect(queryByText(/phone number can only contain/i)).toBeInTheDocument();
 
     fireEvent.change(phoneInput, { target: { value: '9988776655' } });
-    expect(queryByText(/contact number can only contain/i)).not.toBeInTheDocument();
+    expect(queryByText(/phone number can only contain/i)).not.toBeInTheDocument();
     expect(phoneInput).toHaveAttribute('aria-invalid', 'false');
   });
 
   test('accepts a formatted phone number without showing an error', () => {
     const { getByLabelText, queryByText } = render(<App />);
-    const phoneInput = getByLabelText('Contact');
+    const phoneInput = getByLabelText(/contact/i);
 
     fireEvent.change(phoneInput, { target: { value: '+91 99887 76655' } });
 
-    expect(queryByText(/contact number can only contain/i)).not.toBeInTheDocument();
+    expect(queryByText(/phone number can only contain/i)).not.toBeInTheDocument();
   });
 });
 
@@ -172,7 +170,7 @@ describe('email input validation', () => {
 describe('contact card interaction with the phone input', () => {
   test('clicking a contact card does not clobber the phone value being edited', () => {
     const { getByLabelText, getByText } = render(<App />);
-    const phoneInput = getByLabelText('Contact');
+    const phoneInput = getByLabelText(/contact/i);
 
     fireEvent.change(phoneInput, { target: { value: '+91 99887 76655' } });
     fireEvent.click(getByText('A'));
@@ -183,19 +181,19 @@ describe('contact card interaction with the phone input', () => {
 
   test('clicking a contact card keeps an invalid phone value and its error', () => {
     const { getByLabelText, getByText } = render(<App />);
-    const phoneInput = getByLabelText('Contact');
+    const phoneInput = getByLabelText(/contact/i);
 
     fireEvent.change(phoneInput, { target: { value: 'abc123' } });
     fireEvent.click(getByText('B'));
 
     expect(phoneInput.value).toBe('abc123');
     expect(phoneInput).toHaveAttribute('aria-invalid', 'true');
-    expect(getByText(/contact number can only contain/i)).toBeInTheDocument();
+    expect(getByText(/phone number can only contain/i)).toBeInTheDocument();
   });
 
   test('applies the card phone again on the next card click after an edit', () => {
     const { getByLabelText, getByText } = render(<App />);
-    const phoneInput = getByLabelText('Contact');
+    const phoneInput = getByLabelText(/contact/i);
 
     fireEvent.change(phoneInput, { target: { value: '555-1234' } });
     fireEvent.click(getByText('A'));
@@ -207,7 +205,7 @@ describe('contact card interaction with the phone input', () => {
 
   test('protects a second in-progress edit after a card click reset the latch', () => {
     const { getByLabelText, getByText } = render(<App />);
-    const phoneInput = getByLabelText('Contact');
+    const phoneInput = getByLabelText(/contact/i);
 
     fireEvent.change(phoneInput, { target: { value: '555-1234' } });
     fireEvent.click(getByText('A'));
@@ -218,42 +216,9 @@ describe('contact card interaction with the phone input', () => {
 
     expect(phoneInput.value).toBe('555-9876');
   });
+});
 
-  test('supports activating a contact card with the keyboard (Enter and Space)', () => {
-    // Bootstrap and jQuery are not loaded in the test runtime, so the
-    // dialog cannot really open here; a jQuery stub captures the
-    // explicit show the activation path must perform for keyboard
-    // users, because Bootstrap's data-toggle only fires on mouse
-    // clicks.
-    const modalStub = { modal: jest.fn() };
-    const jQueryStub = jest.fn(() => modalStub);
-    const originalJQuery = window.jQuery;
-    window.jQuery = jQueryStub;
-
-    try {
-      const { getByLabelText, getByText } = render(<App />);
-      const phoneInput = getByLabelText('Contact');
-      const card = getByText('A');
-
-      expect(card).toHaveAttribute('role', 'button');
-      expect(card).toHaveAttribute('tabIndex', '0');
-      expect(card).toHaveAttribute('aria-label', 'Contact A: Deepesh Nair');
-
-      fireEvent.change(phoneInput, { target: { value: '555-1234' } });
-      fireEvent.keyDown(card, { key: 'Enter' });
-      expect(phoneInput.value).toBe('555-1234');
-      expect(jQueryStub).toHaveBeenCalledWith('.contact-modal');
-      expect(modalStub.modal).toHaveBeenCalledWith('show');
-
-      fireEvent.keyDown(getByText('B'), { key: ' ' });
-      expect(phoneInput.value).toBe('9988776655');
-      expect(jQueryStub).toHaveBeenLastCalledWith('.contact-modal');
-      expect(modalStub.modal).toHaveBeenLastCalledWith('show');
-    } finally {
-      window.jQuery = originalJQuery;
-    }
-  });
-
+describe('modal dialog labeling', () => {
   test('names the modal dialog via the contact-name heading', () => {
     const { getByRole } = render(<App />);
     // The modal markup is aria-hidden until Bootstrap shows it, so the
@@ -299,25 +264,13 @@ describe('contact card interaction with the email input', () => {
     expect(emailInput).toHaveAttribute('aria-invalid', 'true');
     expect(getByText(/enter a valid email address/i)).toBeInTheDocument();
   });
-
-  test('applies the card email again on the next card click after an edit', () => {
-    const { getByLabelText, getByText } = render(<App />);
-    const emailInput = getByLabelText(/email/i);
-
-    fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
-    fireEvent.click(getByText('A'));
-    expect(emailInput.value).toBe('test@example.com');
-
-    fireEvent.click(getByText('B'));
-    expect(emailInput.value).toBe('denair@redhat.com');
-  });
 });
 
 describe('handleClick phone gate', () => {
   test('refuses an invalid phone passed to handleClick and keeps the current value', () => {
     let modal;
     const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
-    const phoneInput = getByLabelText('Contact');
+    const phoneInput = getByLabelText(/contact/i);
     expect(phoneInput.value).toBe('9988776655');
 
     act(() => { modal.handleClick({ phone: 'abc123' }); });
@@ -328,7 +281,7 @@ describe('handleClick phone gate', () => {
   test('applies a valid phone passed to handleClick while the field is unedited', () => {
     let modal;
     const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
-    const phoneInput = getByLabelText('Contact');
+    const phoneInput = getByLabelText(/contact/i);
 
     act(() => { modal.handleClick({ phone: '+91 555 0100' }); });
 
@@ -338,7 +291,7 @@ describe('handleClick phone gate', () => {
   test('never applies a passed phone once the user has edited the field', () => {
     let modal;
     const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
-    const phoneInput = getByLabelText('Contact');
+    const phoneInput = getByLabelText(/contact/i);
 
     fireEvent.change(phoneInput, { target: { value: '555-1234' } });
     act(() => { modal.handleClick({ phone: '+91 555 0100' }); });
@@ -349,7 +302,7 @@ describe('handleClick phone gate', () => {
   test('applies a different passed phone on the click after an edit-time refusal', () => {
     let modal;
     const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
-    const phoneInput = getByLabelText('Contact');
+    const phoneInput = getByLabelText(/contact/i);
 
     fireEvent.change(phoneInput, { target: { value: '555-1234' } });
     act(() => { modal.handleClick({ phone: '+91 555 0100' }); });

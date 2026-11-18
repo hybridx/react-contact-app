@@ -31,17 +31,6 @@ export function isValidEmail(value) {
   return !domain.includes('..') && !domain.endsWith('.');
 }
 
-// The single demo contact every card opens in the modal. The cards
-// currently share one contact, so both the activation data and the
-// cards' accessible names come from this constant.
-const CONTACT = {
-  name: 'Deepesh Nair',
-  email: 'denair@redhat.com',
-  phone: '9988776655',
-  address: 'JDoe 1120',
-  birthday: '11-1-2020',
-};
-
 export class Modal extends React.Component {
   constructor(props) {
     super(props);
@@ -74,13 +63,12 @@ export class Modal extends React.Component {
         email !== undefined && isValidEmail(email) && !prevState.emailEdited
           ? email
           : prevState.email,
-      // Reset the edit latches together with the card's fields so the
-      // next card click can apply its phone and email. The gates above
-      // still read the pre-click flags, so values the user is actively
-      // typing (the keystrokes that armed the latches between clicks)
-      // are never clobbered by this click.
+      // Reset the phone edit latch together with the card's fields so
+      // the next card click can apply its phone. The gate above still
+      // reads the pre-click flag, so a value the user is actively
+      // typing (the keystroke that armed the latch between clicks) is
+      // never clobbered by this click.
       phoneEdited: false,
-      emailEdited: false,
     }));
   }
 
@@ -92,37 +80,21 @@ export class Modal extends React.Component {
     this.setState({ email: event.target.value, emailEdited: true });
   }
 
-  handleCardActivate() {
-    this.handleClick(CONTACT);
-    // Bootstrap's `data-toggle="modal"` delegation only fires on real
-    // mouse clicks, so an Enter/Space activation never reaches it and
-    // the dialog would not open for keyboard users. Show it explicitly
-    // here; jQuery and Bootstrap are loaded globally by
-    // public/index.html, and Bootstrap ignores a redundant show when
-    // the dialog is already open or opening (e.g. after a mouse click).
-    // The guard keeps jQuery-less environments (the test runtime)
-    // working.
-    if (typeof window !== 'undefined' && window.jQuery) {
-      window.jQuery('.contact-modal').modal('show');
-    }
-  }
-
-  handleCardKeyDown(event) {
-    // The contact cards are divs styled as cards, so they need an
-    // explicit keyboard activation path alongside role="button".
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      this.handleCardActivate();
-    }
-  }
-
 renderModal() {
   const names = [
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
   ].map( (initial, i) => <div key={i} className="contact__card" data-toggle="modal" data-target=".contact-modal"
-                           role="button" tabIndex={0} aria-label={ `Contact ${initial}: ${CONTACT.name}` }
-                           onClick={ () => { this.handleCardActivate(); } }
-                           onKeyDown={ (event) => { this.handleCardKeyDown(event); } }>{initial} </div>);
+                           onClick={
+                             () => {
+                               this.handleClick({
+                                name: 'Deepesh Nair',
+                                email: 'denair@redhat.com',
+                                phone: '9988776655',
+                                address: 'JDoe 1120',
+                                birthday: '11-1-2020',
+                               })
+                             }
+                           }>{initial} </div>);
   
   const name = this.state.name;
   const email = this.state.email;
@@ -138,11 +110,11 @@ renderModal() {
         <div className="modal-dialog modal-lg">
           <div className="modal-content">
             <div className="modal-header">
-              <button className="btn"><i className="fa fa-edit" aria-hidden="true"></i> Edit</button> 
+              <button className="btn"><i className="fa fa-edit"></i> Edit</button> 
               {/* Removal is not implemented yet; keep the control
                   disabled rather than offering a dead destructive
                   action. */}
-              <button className="btn" disabled><i className="far fa-trash-alt" aria-hidden="true"></i> Remove</button>
+              <button className="btn" disabled><i className="far fa-trash-alt"></i> Remove</button>
             </div>
             <div className="modal-body">
               <h1 id="contact-modal-title">
@@ -181,7 +153,7 @@ renderModal() {
                   />
                   { isPhoneInvalid &&
                     <span id="contact-error" className="contact-information__error" role="status">
-                      Contact number can only contain digits, spaces and the
+                      Phone number can only contain digits, spaces and the
                       separators + - ( )
                     </span>
                   }
