@@ -389,4 +389,18 @@ describe('handleClick email gate', () => {
 
     expect(emailInput.value).toBe('custom@example.org');
   });
+
+  test('applies a different passed email on the click after an edit-time refusal', () => {
+    let modal;
+    const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.change(emailInput, { target: { value: 'custom@example.org' } });
+    act(() => { modal.handleClick({ email: 'denair@redhat.com' }); });
+    expect(emailInput.value).toBe('custom@example.org');
+
+    act(() => { modal.handleClick({ email: 'other@example.com' }); });
+
+    expect(emailInput.value).toBe('other@example.com');
+  });
 });
