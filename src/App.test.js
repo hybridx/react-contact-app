@@ -72,7 +72,7 @@ describe('phone input validation', () => {
 
     expect(phoneInput.value).toBe('abc123');
     expect(phoneInput).toHaveAttribute('aria-invalid', 'true');
-    expect(getByText(/phone number can only contain/i)).toBeInTheDocument();
+    expect(getByText(/contact number can only contain/i)).toBeInTheDocument();
   });
 
   test('associates the inline error with the phone input as polite feedback', () => {
@@ -82,7 +82,7 @@ describe('phone input validation', () => {
     fireEvent.change(phoneInput, { target: { value: 'abc123' } });
 
     expect(phoneInput).toHaveAttribute('aria-errormessage', 'contact-error');
-    const error = getByText(/phone number can only contain/i);
+    const error = getByText(/contact number can only contain/i);
     expect(error).toHaveAttribute('id', 'contact-error');
     expect(error).toHaveAttribute('role', 'status');
   });
@@ -92,10 +92,10 @@ describe('phone input validation', () => {
     const phoneInput = getByLabelText('Contact');
 
     fireEvent.change(phoneInput, { target: { value: 'abc123' } });
-    expect(queryByText(/phone number can only contain/i)).toBeInTheDocument();
+    expect(queryByText(/contact number can only contain/i)).toBeInTheDocument();
 
     fireEvent.change(phoneInput, { target: { value: '9988776655' } });
-    expect(queryByText(/phone number can only contain/i)).not.toBeInTheDocument();
+    expect(queryByText(/contact number can only contain/i)).not.toBeInTheDocument();
     expect(phoneInput).toHaveAttribute('aria-invalid', 'false');
   });
 
@@ -105,7 +105,7 @@ describe('phone input validation', () => {
 
     fireEvent.change(phoneInput, { target: { value: '+91 99887 76655' } });
 
-    expect(queryByText(/phone number can only contain/i)).not.toBeInTheDocument();
+    expect(queryByText(/contact number can only contain/i)).not.toBeInTheDocument();
   });
 });
 
@@ -190,7 +190,7 @@ describe('contact card interaction with the phone input', () => {
 
     expect(phoneInput.value).toBe('abc123');
     expect(phoneInput).toHaveAttribute('aria-invalid', 'true');
-    expect(getByText(/phone number can only contain/i)).toBeInTheDocument();
+    expect(getByText(/contact number can only contain/i)).toBeInTheDocument();
   });
 
   test('applies the card phone again on the next card click after an edit', () => {

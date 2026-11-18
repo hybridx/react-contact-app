@@ -63,6 +63,13 @@ export class Modal extends React.Component {
         email !== undefined && isValidEmail(email) && !prevState.emailEdited
           ? email
           : prevState.email,
+      // Reset the edit latches together with the card's fields so the
+      // next card click can apply its phone and email. The gates above
+      // still read the pre-click flags, so values the user is actively
+      // typing (the keystrokes that armed the latches between clicks)
+      // are never clobbered by this click.
+      phoneEdited: false,
+      emailEdited: false,
     }));
   }
 
@@ -72,6 +79,25 @@ export class Modal extends React.Component {
 
   handleEmailChange(event) {
     this.setState({ email: event.target.value, emailEdited: true });
+  }
+
+  handleCardActivate() {
+    this.handleClick({
+      name: 'Deepesh Nair',
+      email: 'denair@redhat.com',
+      phone: '9988776655',
+      address: 'JDoe 1120',
+      birthday: '11-1-2020',
+    });
+  }
+
+  handleCardKeyDown(event) {
+    // The contact cards are divs styled as cards, so they need an
+    // explicit keyboard activation path alongside role="button".
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      this.handleCardActivate();
+    }
   }
 
 renderModal() {
@@ -96,8 +122,8 @@ renderModal() {
         <div className="modal-dialog modal-lg">
           <div className="modal-content">
             <div className="modal-header">
-              <button className="btn"><i className="fa fa-edit"></i> Edit</button> 
-              <button className="btn"><i className="far fa-trash-alt"></i> Remove</button>
+              <button className="btn"><i className="fa fa-edit" aria-hidden="true"></i> Edit</button> 
+              <button className="btn"><i className="far fa-trash-alt" aria-hidden="true"></i> Remove</button>
             </div>
             <div className="modal-body">
               <h1 id="contactModal">
@@ -136,7 +162,7 @@ renderModal() {
                   />
                   { isPhoneInvalid &&
                     <span id="contact-error" className="contact-information__error" role="status">
-                      Phone number can only contain digits, spaces and the
+                      Contact number can only contain digits, spaces and the
                       separators + - ( )
                     </span>
                   }
