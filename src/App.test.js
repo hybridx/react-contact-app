@@ -218,19 +218,6 @@ describe('contact card interaction with the phone input', () => {
   });
 });
 
-describe('modal dialog labeling', () => {
-  test('names the modal dialog via the contact-name heading', () => {
-    const { getByRole } = render(<App />);
-    // The modal markup is aria-hidden until Bootstrap shows it, so the
-    // role queries must include hidden elements.
-    const dialog = getByRole('dialog', { hidden: true });
-    const heading = getByRole('heading', { level: 1, hidden: true });
-
-    expect(heading).toHaveAttribute('id', 'contact-modal-title');
-    expect(dialog).toHaveAttribute('aria-labelledby', 'contact-modal-title');
-  });
-});
-
 describe('contact card interaction with the email input', () => {
   test('clicking a contact card applies the valid email while the field is unedited', () => {
     const { getByLabelText, getByText } = render(<App />);
@@ -263,6 +250,19 @@ describe('contact card interaction with the email input', () => {
     expect(emailInput.value).toBe('foo@bar');
     expect(emailInput).toHaveAttribute('aria-invalid', 'true');
     expect(getByText(/enter a valid email address/i)).toBeInTheDocument();
+  });
+});
+
+describe('modal dialog labeling', () => {
+  test('names the modal dialog via the contact-name heading', () => {
+    const { getByRole } = render(<App />);
+    // The modal markup is aria-hidden until Bootstrap shows it, so the
+    // role queries must include hidden elements.
+    const dialog = getByRole('dialog', { hidden: true });
+    const heading = getByRole('heading', { level: 1, hidden: true });
+
+    expect(heading).toHaveAttribute('id', 'contact-modal-title');
+    expect(dialog).toHaveAttribute('aria-labelledby', 'contact-modal-title');
   });
 });
 
