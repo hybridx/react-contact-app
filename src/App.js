@@ -93,6 +93,7 @@ export class Modal extends React.Component {
       // click must never clobber a value the user is editing.
       phoneEdited: false,
       emailEdited: false,
+    };
   }
   handleClick(contactInfo) {
     const { phone, email, ...contact } = contactInfo;
@@ -222,6 +223,7 @@ export class Modal extends React.Component {
       // contact's data is no longer presented as current.
       ...DEFAULT_CONTACT,
       phoneEdited: false,
+      emailEdited: false,
       // Announce the removal so screen reader users learn that the
       // contact was deleted (rendered with role="status").
       removalNotice: `${prevState.name} was removed from your contacts.`,
@@ -380,7 +382,7 @@ export class Modal extends React.Component {
           tabIndex="-1"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="contactName"
+          aria-labelledby="contact-modal-title"
           ref={ this.setDetailModalRef }
           onKeyDown={ (event) => { this.handleDetailModalKeyDown(event); } }
         >
@@ -401,7 +403,7 @@ export class Modal extends React.Component {
                 ><i className="fa fa-times"></i> Close</button>
               </div>
               <div className="modal-body">
-                <h1 id="contactName">
+                <h1 id="contact-modal-title">
                   { name }
                 </h1>
                 <div className="contact-information">

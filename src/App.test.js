@@ -193,7 +193,7 @@ describe('contact card interaction with the phone input', () => {
 
   test('applies the card phone again on the next card click after an edit', () => {
     const { getByLabelText, getByText } = render(<App />);
-    const phoneInput = getByLabelText(/contact/i);
+    const phoneInput = getByLabelText(/phone/i);
 
     fireEvent.change(phoneInput, { target: { value: '555-1234' } });
     fireEvent.click(getByText('A'));
@@ -205,7 +205,7 @@ describe('contact card interaction with the phone input', () => {
 
   test('protects a second in-progress edit after a card click reset the latch', () => {
     const { getByLabelText, getByText } = render(<App />);
-    const phoneInput = getByLabelText(/contact/i);
+    const phoneInput = getByLabelText(/phone/i);
 
     fireEvent.change(phoneInput, { target: { value: '555-1234' } });
     fireEvent.click(getByText('A'));
@@ -711,7 +711,7 @@ describe('handleClick phone gate', () => {
   test('applies a different passed phone on the click after an edit-time refusal', () => {
     let modal;
     const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
-    const phoneInput = getByLabelText(/contact/i);
+    const phoneInput = getByLabelText(/phone/i);
 
     fireEvent.change(phoneInput, { target: { value: '555-1234' } });
     act(() => { modal.handleClick({ phone: '+91 555 0100' }); });
