@@ -251,6 +251,49 @@ describe('contact card interaction with the email input', () => {
     expect(emailInput).toHaveAttribute('aria-invalid', 'true');
     expect(getByText(/enter a valid email address/i)).toBeInTheDocument();
   });
+
+  test('applies the card email again on the next card click after an edit', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.change(emailInput, { target: { value: 'custom@example.org' } });
+    fireEvent.click(getByText('A'));
+    expect(emailInput.value).toBe('custom@example.org');
+
+    fireEvent.click(getByText('B'));
+    expect(emailInput.value).toBe('denair@redhat.com');
+  });
+
+  test('protects a second in-progress edit after a card click reset the latch', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.change(emailInput, { target: { value: 'custom@example.org' } });
+    fireEvent.click(getByText('A'));
+    expect(emailInput.value).toBe('custom@example.org');
+
+    fireEvent.change(emailInput, { target: { value: 'other@example.org' } });
+    fireEvent.click(getByText('B'));
+
+    expect(emailInput.value).toBe('other@example.org');
+  });
+
+  test('keeps an invalid edited email on the first click, then applies the card email on the next', () => {
+    const { getByLabelText, getByText, queryByText } = render(<App />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.change(emailInput, { target: { value: 'foo@bar' } });
+    fireEvent.click(getByText('A'));
+    expect(emailInput.value).toBe('foo@bar');
+    expect(emailInput).toHaveAttribute('aria-invalid', 'true');
+    expect(getByText(/enter a valid email address/i)).toBeInTheDocument();
+
+    fireEvent.click(getByText('B'));
+
+    expect(emailInput.value).toBe('denair@redhat.com');
+    expect(emailInput).toHaveAttribute('aria-invalid', 'false');
+    expect(queryByText(/enter a valid email address/i)).not.toBeInTheDocument();
+  });
 });
 
 describe('modal dialog labeling', () => {
@@ -345,5 +388,19 @@ describe('handleClick email gate', () => {
     act(() => { modal.handleClick({ email: 'denair@redhat.com' }); });
 
     expect(emailInput.value).toBe('custom@example.org');
+  });
+
+  test('applies a different passed email on the click after an edit-time refusal', () => {
+    let modal;
+    const { getByLabelText } = render(<Modal ref={ (instance) => { modal = instance; } } />);
+    const emailInput = getByLabelText(/email/i);
+
+    fireEvent.change(emailInput, { target: { value: 'custom@example.org' } });
+    act(() => { modal.handleClick({ email: 'denair@redhat.com' }); });
+    expect(emailInput.value).toBe('custom@example.org');
+
+    act(() => { modal.handleClick({ email: 'other@example.com' }); });
+
+    expect(emailInput.value).toBe('other@example.com');
   });
 });
