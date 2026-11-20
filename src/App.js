@@ -64,16 +64,37 @@ const DEFAULT_CONTACTS = [
   ...DEMO_CONTACT,
 }));
 
+// Status notices for the persistence outcomes, rendered with
+// role="status" so assistive technology announces them.
+const LOAD_FAILED_NOTICE =
+  'Your saved contacts could not be read. Showing the default contacts.';
+const SAVE_FAILED_NOTICE =
+  'Contacts could not be saved. Your changes will be lost when the page is refreshed.';
+
+// Contacts added at runtime get their id from a timestamp paired
+// with a monotonic counter, so two adds within the same millisecond
+// (e.g. a rapid double-click reading the same state twice) can
+// never produce colliding ids.
+let addedContactSeq = 0;
+
 export class Modal extends React.Component {
   constructor(props) {
     super(props);
+    // Read the persisted list before building the state, so a
+    // failed read (blocked storage, corrupt data) can be reported
+    // while the demo contacts keep the app usable.
+    const stored = loadContacts();
     this.state = {
       ...DEFAULT_CONTACT,
       // The contact cards currently shown; removals delete from this
       // list so the grid stays in sync with the modal actions. The
       // list is restored from localStorage so it survives a page
       // refresh; the demo contacts are the first-run default.
-      contacts: loadContacts() || DEFAULT_CONTACTS,
+      contacts: stored.contacts || DEFAULT_CONTACTS,
+      // Non-blocking notice shown when the persisted list could not
+      // be read: the demo contacts are shown instead, and the user
+      // is told rather than left to discover the swap silently.
+      storageNotice: stored.loadFailed ? LOAD_FAILED_NOTICE : null,
       // The id of the contact whose details are displayed in the modal;
       // this is the contact the Remove action targets. It is null
       // while no card is open, and Remove is gated on a selection.
@@ -85,6 +106,9 @@ export class Modal extends React.Component {
       // Status message announcing a completed removal; rendered with
       // role="status" so assistive technology picks it up.
       removalNotice: null,
+      // Status message announcing a completed add; rendered with
+      // role="status" like the removal notice.
+      addNotice: null,
       // Whether the contact detail modal is shown. Its open state is
       // managed here in React rather than via Bootstrap's data-toggle,
       // so the modal can also be closed programmatically — notably
@@ -145,14 +169,17 @@ export class Modal extends React.Component {
 
   // Adds the contact currently shown in the modal to the contact list
   // and persists the list to localStorage, so it survives a page
-  // refresh. An invalid phone or email value is never persisted.
+  // refresh. An invalid phone or email value is never persisted. The
+  // add is announced via a status message, the form resets to the
+  // defaults for the next entry, and a failed write is reported
+  // instead of silently losing the change on the next refresh.
   handleAddContact() {
     const { contacts, name, email, phone, address, birthday } = this.state;
     if (!isValidEmail(email) || !isValidPhone(phone)) {
       return;
     }
     const contact = {
-      id: `contact-${Date.now()}-${contacts.length}`,
+      id: `contact-${Date.now()}-${addedContactSeq++}`,
       label: String(name).trim().charAt(0).toUpperCase() || '?',
       name,
       email,
@@ -161,8 +188,23 @@ export class Modal extends React.Component {
       birthday,
     };
     const nextContacts = [...contacts, contact];
-    this.setState({ contacts: nextContacts });
-    saveContacts(nextContacts);
+    const saved = saveContacts(nextContacts);
+    this.setState({
+      contacts: nextContacts,
+      // Reset the detail form to the defaults so the next contact
+      // starts from a clean slate, and re-arm the edit latches so a
+      // card click applies its values again.
+      ...DEFAULT_CONTACT,
+      nameEdited: false,
+      phoneEdited: false,
+      emailEdited: false,
+      addressEdited: false,
+      birthdayEdited: false,
+      // Announce the add so screen reader users and users behind
+      // the modal overlay learn that the contact was appended.
+      addNotice: `${name} was added to your contacts.`,
+      storageNotice: saved ? null : SAVE_FAILED_NOTICE,
+    });
   }
 
   handleNameChange(event) {
@@ -200,6 +242,7 @@ export class Modal extends React.Component {
     this.setState({
       selectedCardId: contact.id,
       removalNotice: null,
+      addNotice: null,
       confirmingRemove: false,
       detailModalOpen: true,
     }, () => {
@@ -265,8 +308,10 @@ export class Modal extends React.Component {
       (contact) => contact.id !== this.state.selectedCardId
     );
     // Persist the removal so the contact stays gone after a page
-    // refresh; the persisted list is the source of truth.
-    saveContacts(nextContacts);
+    // refresh; the persisted list is the source of truth. A failed
+    // write is reported instead of silently resurfacing the contact
+    // after the next refresh.
+    const saved = saveContacts(nextContacts);
     this.setState((prevState) => ({
       contacts: nextContacts,
       selectedCardId: null,
@@ -286,6 +331,7 @@ export class Modal extends React.Component {
       // Announce the removal so screen reader users learn that the
       // contact was deleted (rendered with role="status").
       removalNotice: `${prevState.name} was removed from your contacts.`,
+      storageNotice: saved ? null : SAVE_FAILED_NOTICE,
     }), () => {
       // The Remove button is disabled once the selection is cleared,
       // so focus moves on to the grid instead of the trigger (see
@@ -433,8 +479,16 @@ export class Modal extends React.Component {
           ? <p className="contact__empty" tabIndex="-1">No contacts yet</p>
           : cardElements }
         { this.state.removalNotice &&
-          <p className="contact__removal-notice" role="status">
+          <p className="contact__notice" role="status">
             { this.state.removalNotice }
+          </p> }
+        { this.state.addNotice &&
+          <p className="contact__notice" role="status">
+            { this.state.addNotice }
+          </p> }
+        { this.state.storageNotice &&
+          <p className="contact__notice" role="status">
+            { this.state.storageNotice }
           </p> }
         <div
           className={ 'modal contact-modal' + (this.state.detailModalOpen ? ' show' : '') }
@@ -479,6 +533,7 @@ export class Modal extends React.Component {
                       type="text"
                       id="name"
                       value={ name }
+                      maxLength={ 80 }
                       onChange={ (event) => this.handleNameChange(event) }
                     />
                   </div>

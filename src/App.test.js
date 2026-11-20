@@ -694,8 +694,8 @@ describe('detail modal interaction', () => {
 });
 
 describe('contacts storage helpers', () => {
-  test('loadContacts returns null when nothing has been persisted', () => {
-    expect(loadContacts(fakeStorage())).toBeNull();
+  test('loadContacts reports an empty first run when nothing has been persisted', () => {
+    expect(loadContacts(fakeStorage())).toEqual({ contacts: null, loadFailed: false });
   });
 
   test('saveContacts and loadContacts round-trip a contact list', () => {
@@ -707,12 +707,48 @@ describe('contacts storage helpers', () => {
     saveContacts(contacts, storage);
 
     expect(storage.getItem(STORAGE_KEY)).toBe(JSON.stringify(contacts));
-    expect(loadContacts(storage)).toEqual(contacts);
+    expect(loadContacts(storage)).toEqual({ contacts, loadFailed: false });
   });
 
-  test('loadContacts returns null for unreadable or non-list data', () => {
-    expect(loadContacts(fakeStorage({ [STORAGE_KEY]: 'not json' }))).toBeNull();
-    expect(loadContacts(fakeStorage({ [STORAGE_KEY]: '{"a":1}' }))).toBeNull();
+  test('loadContacts reports a failed read for unreadable or non-list data', () => {
+    expect(loadContacts(fakeStorage({ [STORAGE_KEY]: 'not json' })))
+      .toEqual({ contacts: null, loadFailed: true });
+    expect(loadContacts(fakeStorage({ [STORAGE_KEY]: '{"a":1}' })))
+      .toEqual({ contacts: null, loadFailed: true });
+  });
+
+  test('loadContacts reports a failed read for a list with non-object entries', () => {
+    expect(loadContacts(fakeStorage({ [STORAGE_KEY]: '[null]' })))
+      .toEqual({ contacts: null, loadFailed: true });
+    expect(loadContacts(fakeStorage({ [STORAGE_KEY]: '[1, "x", []]' })))
+      .toEqual({ contacts: null, loadFailed: true });
+  });
+
+  test('loadContacts fails soft when the storage read throws', () => {
+    const storage = {
+      getItem: () => { throw new Error('read failed'); },
+      setItem: () => {},
+      removeItem: () => {},
+    };
+
+    expect(loadContacts(storage)).toEqual({ contacts: null, loadFailed: true });
+  });
+
+  test('loadContacts fails soft when window.localStorage cannot be accessed', () => {
+    // Browsers that block site data throw on the localStorage getter
+    // itself; resolving the default storage must never escape the
+    // fail-soft handling.
+    const getter = jest.spyOn(window, 'localStorage', 'get')
+      .mockImplementation(() => { throw new Error('SecurityError'); });
+    try {
+      expect(loadContacts()).toEqual({ contacts: null, loadFailed: true });
+    } finally {
+      getter.mockRestore();
+    }
+  });
+
+  test('saveContacts reports a successful write', () => {
+    expect(saveContacts([], fakeStorage())).toBe(true);
   });
 
   test('saveContacts keeps going when the storage write fails', () => {
@@ -723,14 +759,22 @@ describe('contacts storage helpers', () => {
     };
 
     expect(() => saveContacts([], storage)).not.toThrow();
+    expect(saveContacts([], storage)).toBe(false);
+  });
+
+  test('saveContacts fails soft when window.localStorage cannot be accessed', () => {
+    const getter = jest.spyOn(window, 'localStorage', 'get')
+      .mockImplementation(() => { throw new Error('SecurityError'); });
+    try {
+      expect(() => saveContacts([])).not.toThrow();
+      expect(saveContacts([])).toBe(false);
+    } finally {
+      getter.mockRestore();
+    }
   });
 });
 
 describe('contact list persistence', () => {
-  afterEach(() => {
-    window.localStorage.clear();
-  });
-
   test('shows the demo contacts when nothing has been persisted', () => {
     const { getByText, getAllByTitle } = render(<App />);
 
@@ -784,10 +828,123 @@ describe('contact list persistence', () => {
     expect(second.getByLabelText(/email/i).value).toBe('jdoe@redhat.com');
   });
 
-  test('Add Contact refuses to persist an invalid email or phone value', () => {
+  test('announces a failed read and falls back to the demo contacts', () => {
+    window.localStorage.setItem(STORAGE_KEY, 'not json');
+
+    const { getByText, getAllByTitle, getByRole } = render(<App />);
+
+    expect(getByText('A')).toBeInTheDocument();
+    expect(getByText('J')).toBeInTheDocument();
+    expect(getAllByTitle('Deepesh Nair')).toHaveLength(10);
+    expect(getByRole('status'))
+      .toHaveTextContent(/saved contacts could not be read/i);
+  });
+
+  test('announces when a change could not be persisted', () => {
+    // jsdom's localStorage methods cannot be spied on directly, so
+    // swap in a storage whose writes always fail.
+    const realStorage = window.localStorage;
+    const failingStorage = {
+      getItem: (key) => realStorage.getItem(key),
+      setItem: () => { throw new Error('quota exceeded'); },
+      removeItem: (key) => realStorage.removeItem(key),
+      clear: () => realStorage.clear(),
+    };
+    Object.defineProperty(window, 'localStorage', {
+      value: failingStorage,
+      configurable: true,
+      writable: true,
+    });
+    try {
+      const { getByLabelText, getByText, getByTitle } = render(<App />);
+
+      fireEvent.change(getByLabelText(/name/i), { target: { value: 'Jane Roe' } });
+      fireEvent.click(getByText('Add Contact'));
+
+      // The contact is added for the current session, and the failed
+      // write is announced instead of silently lost on refresh.
+      expect(getByTitle('Jane Roe')).toBeInTheDocument();
+      expect(getByText(/contacts could not be saved/i))
+        .toHaveAttribute('role', 'status');
+    } finally {
+      Object.defineProperty(window, 'localStorage', {
+        value: realStorage,
+        configurable: true,
+        writable: true,
+      });
+    }
+  });
+
+  test('announces an added contact and resets the form', () => {
+    const { getByLabelText, getByText, getByTitle } = render(<App />);
+
+    fireEvent.change(getByLabelText(/name/i), { target: { value: 'Jane Roe' } });
+    fireEvent.change(getByLabelText(/email/i), { target: { value: 'jane@example.com' } });
+    fireEvent.click(getByText('Add Contact'));
+
+    expect(getByTitle('Jane Roe')).toBeInTheDocument();
+    expect(getByText(/jane roe was added to your contacts/i))
+      .toHaveAttribute('role', 'status');
+    // The form resets to the defaults so the next entry starts clean.
+    expect(getByLabelText(/name/i).value).toBe('John Doe');
+  });
+
+  test('two adds within the same millisecond produce distinct contact ids', () => {
+    let modal;
+    render(<Modal ref={ (instance) => { modal = instance; } } />);
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1700000000000);
+    try {
+      // A rapid double-click freezes the timestamp for both adds;
+      // the generated ids must still never collide.
+      act(() => { modal.handleAddContact(); });
+      act(() => { modal.handleAddContact(); });
+
+      const added = modal.state.contacts.filter(
+        (contact) => typeof contact.id === 'string'
+      );
+      expect(added).toHaveLength(2);
+      expect(new Set(added.map((contact) => contact.id)).size).toBe(2);
+
+      const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY));
+      expect(new Set(stored.map((contact) => contact.id)).size)
+        .toBe(stored.length);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  test('a confirmed removal is persisted and stays gone after remounting', () => {
+    const first = render(<App />);
+
+    fireEvent.click(first.getByText('A'));
+    fireEvent.click(first.getByText('Remove'));
+    fireEvent.click(first.getByRole('button', { name: 'Remove contact' }));
+
+    const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY));
+    expect(stored).toHaveLength(9);
+    expect(stored.map((contact) => contact.label)).not.toContain('A');
+
+    first.unmount();
+    const second = render(<App />);
+
+    expect(second.queryByText('A')).toBeNull();
+    expect(second.getByText('B')).toBeInTheDocument();
+  });
+
+  test('Add Contact refuses to persist an invalid email value', () => {
     const { getByLabelText, getByText, queryByTitle } = render(<App />);
 
     fireEvent.change(getByLabelText(/email/i), { target: { value: 'foo@bar' } });
+    fireEvent.click(getByText('Add Contact'));
+
+    expect(queryByTitle('John Doe')).toBeNull();
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  test('Add Contact refuses to persist an invalid phone value', () => {
+    const { getByLabelText, getByText, queryByTitle } = render(<App />);
+
+    fireEvent.change(getByLabelText(/phone/i), { target: { value: 'abc123' } });
     fireEvent.click(getByText('Add Contact'));
 
     expect(queryByTitle('John Doe')).toBeNull();
@@ -807,6 +964,63 @@ describe('contact list persistence', () => {
     expect(getByLabelText(/name/i).value).toBe('Zed Zane');
     expect(getByLabelText(/email/i).value).toBe('zed@example.com');
     expect(getByLabelText(/phone/i).value).toBe('+91 99887 76655');
+  });
+});
+
+describe('contact card interaction with the name input', () => {
+  test('clicking a contact card applies the card name while the field is unedited', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const nameInput = getByLabelText(/name/i);
+    expect(nameInput.value).toBe('John Doe');
+
+    fireEvent.click(getByText('A'));
+
+    expect(nameInput.value).toBe('Deepesh Nair');
+  });
+
+  test('clicking a contact card does not clobber the name value being edited', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const nameInput = getByLabelText(/name/i);
+
+    fireEvent.change(nameInput, { target: { value: 'Jane Roe' } });
+    fireEvent.click(getByText('B'));
+
+    expect(nameInput.value).toBe('Jane Roe');
+  });
+
+  test('applies the card name again on the next card click after an edit', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const nameInput = getByLabelText(/name/i);
+
+    fireEvent.change(nameInput, { target: { value: 'Jane Roe' } });
+    fireEvent.click(getByText('A'));
+    expect(nameInput.value).toBe('Jane Roe');
+
+    fireEvent.click(getByText('B'));
+
+    expect(nameInput.value).toBe('Deepesh Nair');
+  });
+});
+
+describe('contact card interaction with the address and birthday inputs', () => {
+  test('clicking a contact card does not clobber the address value being edited', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const addressInput = getByLabelText(/address/i);
+
+    fireEvent.change(addressInput, { target: { value: 'Custom 123' } });
+    fireEvent.click(getByText('A'));
+
+    expect(addressInput.value).toBe('Custom 123');
+  });
+
+  test('clicking a contact card does not clobber the birthday value being edited', () => {
+    const { getByLabelText, getByText } = render(<App />);
+    const birthdayInput = getByLabelText(/birthday/i);
+
+    fireEvent.change(birthdayInput, { target: { value: '2001-02-03' } });
+    fireEvent.click(getByText('B'));
+
+    expect(birthdayInput.value).toBe('2001-02-03');
   });
 });
 
