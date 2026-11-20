@@ -1,5 +1,6 @@
 import React from 'react';
 import './App.css';
+import { loadContacts, saveContacts } from './contactsStorage';
 
 // A phone number is valid when it contains at least one digit and no
 // characters outside digits, spaces and the common separators + - ( ).
@@ -47,34 +48,66 @@ const DEFAULT_CONTACT = {
   ...DEMO_CONTACT,
 };
 
-// The cards shown in the grid. Each card carries a stable id and the
-// initial rendered on it, so a removal targets exactly one card. The
-// contact record is the demo record the base app opened for every
-// card, so this change does not alter the app's existing demo data.
-const CONTACT_CARDS = [
+// The contacts shown in the grid. Each contact carries a stable id and
+// the label rendered on its card, so a removal targets exactly one
+// card. The list doubles as the first-run demo list: it is restored
+// from localStorage so it survives a page refresh, and once a contact
+// is added the persisted list (which starts from these entries)
+// becomes the source of truth.
+const DEFAULT_CONTACTS = [
   'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
-].map((initial, index) => ({
+].map((label, index) => ({
   id: index + 1,
-  initial,
-  contact: {
-    name: 'Deepesh Nair',
-    email: 'denair@redhat.com',
-    ...DEMO_CONTACT,
-  },
+  label,
+  name: 'Deepesh Nair',
+  email: 'denair@redhat.com',
+  ...DEMO_CONTACT,
 }));
+
+// Status notices for the persistence outcomes, rendered with
+// role="status" so assistive technology announces them.
+const LOAD_FAILED_NOTICE =
+  'Your saved contacts could not be read. Showing the default contacts.';
+const SAVE_FAILED_NOTICE =
+  'Contacts could not be saved. Your changes will be lost when the ' +
+  'page is refreshed. Try again, or copy your contacts before ' +
+  'leaving the page.';
+
+// Contacts added at runtime get their id from a timestamp paired
+// with a monotonic counter, so two adds within the same millisecond
+// (e.g. a rapid double-click reading the same state twice) can
+// never produce colliding ids.
+let addedContactSeq = 0;
 
 export class Modal extends React.Component {
   constructor(props) {
     super(props);
+    // Read the persisted list before building the state, so a
+    // failed read (blocked storage, corrupt data) can be reported
+    // while the demo contacts keep the app usable.
+    const stored = loadContacts();
     this.state = {
       ...DEFAULT_CONTACT,
       // The contact cards currently shown; removals delete from this
-      // list so the grid stays in sync with the modal actions.
-      cards: CONTACT_CARDS,
-      // The id of the card whose details are displayed in the modal;
+      // list so the grid stays in sync with the modal actions. The
+      // list is restored from localStorage so it survives a page
+      // refresh; the demo contacts are the first-run default.
+      contacts: stored.contacts || DEFAULT_CONTACTS,
+      // Non-blocking notice shown when the persisted list could not
+      // be read: the demo contacts are shown instead, and the user
+      // is told rather than left to discover the swap silently.
+      storageNotice: stored.loadFailed ? LOAD_FAILED_NOTICE : null,
+      // The kind of notice currently shown ('load' or 'save'). A
+      // successful save may clear a save-failure notice (the problem
+      // it reported is resolved), but never a load-failure one: the
+      // contacts stored before the failed read were never restored,
+      // and saving the current list does not change that — so the
+      // read-failure notice stays for the rest of the session.
+      storageNoticeKind: stored.loadFailed ? 'load' : null,
+      // The id of the contact whose details are displayed in the modal;
       // this is the contact the Remove action targets. It is null
       // while no card is open, and Remove is gated on a selection.
-      selectedCardId: null,
+      selectedContactId: null,
       // Whether the remove-confirmation dialog is shown. Deletion is
       // two-step by design: the Remove button only opens this dialog
       // and the contact is deleted solely on an explicit confirm.
@@ -82,6 +115,9 @@ export class Modal extends React.Component {
       // Status message announcing a completed removal; rendered with
       // role="status" so assistive technology picks it up.
       removalNotice: null,
+      // Status message announcing a completed add; rendered with
+      // role="status" like the removal notice.
+      addNotice: null,
       // Whether the contact detail modal is shown. Its open state is
       // managed here in React rather than via Bootstrap's data-toggle,
       // so the modal can also be closed programmatically — notably
@@ -89,21 +125,28 @@ export class Modal extends React.Component {
       // grid. This also keeps Bootstrap's own modal focus enforcement
       // out of the way of the confirmation dialog's focus handling.
       detailModalOpen: false,
-      // Whether the user has typed in the phone or email field; a card
-      // click must never clobber a value the user is editing.
+      // Whether the user has typed in a field; a card click must never
+      // clobber a value the user is editing.
+      nameEdited: false,
       phoneEdited: false,
       emailEdited: false,
+      addressEdited: false,
+      birthdayEdited: false,
     };
   }
-  handleClick(contactInfo) {
-    const { phone, email, ...contact } = contactInfo;
+  handleClick(contact) {
+    const { name, phone, email, address, birthday } = contact;
     this.setState((prevState) => ({
-      ...contact,
       // Gate: an invalid phone or email value is never persisted — when
       // one is passed, the update is refused and the current value is
       // kept. A valid value is only applied while the user has not
       // edited the field, so a card click cannot clobber the value
-      // being typed.
+      // being typed. The same protection applies to the free-form
+      // fields.
+      name:
+        name !== undefined && !prevState.nameEdited
+          ? name
+          : prevState.name,
       phone:
         phone !== undefined && isValidPhone(phone) && !prevState.phoneEdited
           ? phone
@@ -112,14 +155,93 @@ export class Modal extends React.Component {
         email !== undefined && isValidEmail(email) && !prevState.emailEdited
           ? email
           : prevState.email,
-      // Reset the phone and email edit latches together with the card's
-      // fields so the next card click can apply its values. The gate above
-      // still reads the pre-click flag, so a value the user is actively
-      // typing (the keystroke that armed the latch between clicks) is
+      address:
+        address !== undefined && !prevState.addressEdited
+          ? address
+          : prevState.address,
+      birthday:
+        birthday !== undefined && !prevState.birthdayEdited
+          ? birthday
+          : prevState.birthday,
+      // Reset the edit latches together with the card's fields so the
+      // next card click can apply its values. The gates above still
+      // read the pre-click flags, so a value the user is actively
+      // typing (the keystroke that armed a latch between clicks) is
       // never clobbered by this click.
+      nameEdited: false,
       phoneEdited: false,
       emailEdited: false,
+      addressEdited: false,
+      birthdayEdited: false,
     }));
+  }
+
+  // Adds the contact currently shown in the modal to the contact list
+  // and persists the list to localStorage, so it survives a page
+  // refresh. An empty name or an invalid phone or email value is
+  // never persisted. The add is announced via a status message, the
+  // form resets to the defaults for the next entry, and a failed
+  // write is reported instead of silently losing the change on the
+  // next refresh.
+  handleAddContact() {
+    const { contacts, name, email, phone, address, birthday } = this.state;
+    // The name is required (an empty or whitespace-only value is
+    // never persisted) and is stored trimmed, so a padded entry
+    // cannot be saved and redisplayed with its surrounding
+    // whitespace.
+    const trimmedName = String(name).trim();
+    if (trimmedName === '' ||
+        !isValidEmail(email) || !isValidPhone(phone)) {
+      return;
+    }
+    const contact = {
+      id: `contact-${Date.now()}-${addedContactSeq++}`,
+      label: trimmedName.charAt(0).toUpperCase() || '?',
+      name: trimmedName,
+      email,
+      phone,
+      address,
+      birthday,
+    };
+    const nextContacts = [...contacts, contact];
+    const saved = saveContacts(nextContacts);
+    this.setState((prevState) => ({
+      contacts: nextContacts,
+      // The form reset to the defaults no longer shows the selected
+      // contact, so the selection must not survive the add: Remove
+      // is disabled until a card is clicked again, and a pending
+      // confirmation is dismissed so it can never name one contact
+      // while deleting another.
+      selectedContactId: null,
+      confirmingRemove: false,
+      // Reset the detail form to the defaults so the next contact
+      // starts from a clean slate, and re-arm the edit latches so a
+      // card click applies its values again.
+      ...DEFAULT_CONTACT,
+      nameEdited: false,
+      phoneEdited: false,
+      emailEdited: false,
+      addressEdited: false,
+      birthdayEdited: false,
+      // Announce the add so screen reader users and users behind
+      // the modal overlay learn that the contact was appended.
+      addNotice: `${trimmedName} was added to your contacts.`,
+      // A failed write is announced; a successful write clears an
+      // earlier save-failure notice but never a load-failure one
+      // (see storageNoticeKind above).
+      storageNotice: saved
+        ? (prevState.storageNoticeKind === 'load'
+            ? prevState.storageNotice
+            : null)
+        : SAVE_FAILED_NOTICE,
+      storageNoticeKind: saved
+        ? (prevState.storageNoticeKind === 'load' ? 'load' : null)
+        : 'save',
+    }));
+  }
+
+  handleNameChange(event) {
+    this.setState({ name: event.target.value, nameEdited: true });
   }
 
   handlePhoneChange(event) {
@@ -132,16 +254,18 @@ export class Modal extends React.Component {
 
   // The address and birthday inputs are controlled so their displayed
   // values follow the detail-view resets (after a removal or a modal
-  // close) instead of keeping whatever the user last typed.
+  // close) instead of keeping whatever the user last typed. The edit
+  // latches keep a card click from clobbering a value being edited,
+  // and make an added contact capture what the user typed.
   handleAddressChange(event) {
-    this.setState({ address: event.target.value });
+    this.setState({ address: event.target.value, addressEdited: true });
   }
 
   handleBirthdayChange(event) {
-    this.setState({ birthday: event.target.value });
+    this.setState({ birthday: event.target.value, birthdayEdited: true });
   }
 
-  handleCardClick(card, event) {
+  handleCardClick(contact, event) {
     // Remember which card opened the dialog so focus can return to it
     // when the detail modal is closed again.
     this.openerCard = event ? event.currentTarget : null;
@@ -149,8 +273,9 @@ export class Modal extends React.Component {
     // pending remove confirmation, so an open confirmation can never
     // retarget to a contact the user did not ask to remove.
     this.setState({
-      selectedCardId: card.id,
+      selectedContactId: contact.id,
       removalNotice: null,
+      addNotice: null,
       confirmingRemove: false,
       detailModalOpen: true,
     }, () => {
@@ -158,7 +283,32 @@ export class Modal extends React.Component {
       // are not left on the grid behind the modal backdrop.
       this.focusDetailModal();
     });
-    this.handleClick(card.contact);
+    this.handleClick(contact);
+  }
+
+  // Open the detail modal from the empty grid. The Add Contact
+  // action lives in the modal header, and with no cards left there
+  // is no card click that could open the modal — without this entry
+  // point an empty list could never grow again. The form starts
+  // from the defaults, focus moves into the modal on open, and it
+  // returns to this button on close, like the card-click path.
+  handleEmptyAddClick(event) {
+    this.openerCard = event ? event.currentTarget : null;
+    this.setState({
+      selectedContactId: null,
+      confirmingRemove: false,
+      removalNotice: null,
+      addNotice: null,
+      detailModalOpen: true,
+      ...DEFAULT_CONTACT,
+      nameEdited: false,
+      phoneEdited: false,
+      emailEdited: false,
+      addressEdited: false,
+      birthdayEdited: false,
+    }, () => {
+      this.focusDetailModal();
+    });
   }
 
   // Close the detail modal without removing anything: any pending
@@ -169,10 +319,13 @@ export class Modal extends React.Component {
     this.setState({
       detailModalOpen: false,
       confirmingRemove: false,
-      selectedCardId: null,
+      selectedContactId: null,
       ...DEFAULT_CONTACT,
+      nameEdited: false,
       phoneEdited: false,
       emailEdited: false,
+      addressEdited: false,
+      birthdayEdited: false,
     });
     if (this.openerCard && document.contains(this.openerCard)) {
       this.openerCard.focus();
@@ -191,7 +344,7 @@ export class Modal extends React.Component {
     // Gate: the confirmation dialog only opens when a card is
     // selected — with no selection there is nothing to remove, and
     // opening the dialog would present a no-op as a real removal.
-    if (this.state.selectedCardId === null) {
+    if (this.state.selectedContactId === null) {
       return;
     }
     this.setState({ confirmingRemove: true });
@@ -205,15 +358,21 @@ export class Modal extends React.Component {
   handleRemoveConfirm() {
     // Gate: confirming without a selection deletes nothing; the only
     // effect is closing the dialog.
-    if (this.state.selectedCardId === null) {
+    if (this.state.selectedContactId === null) {
       this.setState({ confirmingRemove: false });
       return;
     }
+    const nextContacts = this.state.contacts.filter(
+      (contact) => contact.id !== this.state.selectedContactId
+    );
+    // Persist the removal so the contact stays gone after a page
+    // refresh; the persisted list is the source of truth. A failed
+    // write is reported instead of silently resurfacing the contact
+    // after the next refresh.
+    const saved = saveContacts(nextContacts);
     this.setState((prevState) => ({
-      cards: prevState.cards.filter(
-        (card) => card.id !== prevState.selectedCardId
-      ),
-      selectedCardId: null,
+      contacts: nextContacts,
+      selectedContactId: null,
       confirmingRemove: false,
       // Close the detail modal: the contact it showed is gone, and
       // with the modal closed, moving focus back to the grid no
@@ -222,11 +381,25 @@ export class Modal extends React.Component {
       // Reset the detail view to the defaults so the removed
       // contact's data is no longer presented as current.
       ...DEFAULT_CONTACT,
+      nameEdited: false,
       phoneEdited: false,
       emailEdited: false,
+      addressEdited: false,
+      birthdayEdited: false,
       // Announce the removal so screen reader users learn that the
       // contact was deleted (rendered with role="status").
       removalNotice: `${prevState.name} was removed from your contacts.`,
+      // A failed write is announced; a successful write clears an
+      // earlier save-failure notice but never a load-failure one
+      // (see storageNoticeKind above).
+      storageNotice: saved
+        ? (prevState.storageNoticeKind === 'load'
+            ? prevState.storageNotice
+            : null)
+        : SAVE_FAILED_NOTICE,
+      storageNoticeKind: saved
+        ? (prevState.storageNoticeKind === 'load' ? 'load' : null)
+        : 'save',
     }), () => {
       // The Remove button is disabled once the selection is cleared,
       // so focus moves on to the grid instead of the trigger (see
@@ -349,14 +522,21 @@ export class Modal extends React.Component {
   }
 
   renderModal() {
-    const cardElements = this.state.cards.map((card) =>
+    // Each card's accessible name carries a positional suffix so it
+    // stays unique even when contacts share a name and label (e.g.
+    // two adds of the same name), letting screen-reader users tell
+    // the cards apart (WCAG 4.1.2).
+    const contactCount = this.state.contacts.length;
+    const cardElements = this.state.contacts.map((contact, index) =>
       <button
-        key={ card.id }
+        key={ contact.id }
         type="button"
         className="contact__card"
-        aria-label={ `${card.contact.name}, contact ${card.initial}` }
-        onClick={ (event) => { this.handleCardClick(card, event); } }
-      >{ card.initial } </button>);
+        aria-label={ `${contact.name}, contact ${contact.label} ` +
+          `(${index + 1} of ${contactCount})` }
+        title={ contact.name }
+        onClick={ (event) => { this.handleCardClick(contact, event); } }
+      >{ contact.label } </button>);
 
     const name = this.state.name;
     const email = this.state.email;
@@ -364,17 +544,33 @@ export class Modal extends React.Component {
     const address = this.state.address;
     const birthday = this.state.birthday;
     const confirmingRemove = this.state.confirmingRemove;
-    const hasSelection = this.state.selectedCardId !== null;
+    const hasSelection = this.state.selectedContactId !== null;
+    const isNameInvalid = String(name).trim() === '';
     const isPhoneInvalid = !isValidPhone(phone);
     const isEmailInvalid = !isValidEmail(email);
     return (
       <div className="contact" ref={ this.setContactGridRef }>
-        { this.state.cards.length === 0
-          ? <p className="contact__empty" tabIndex="-1">No contacts yet</p>
+        { this.state.contacts.length === 0
+          ? <>
+              <p className="contact__empty" tabIndex="-1">No contacts yet</p>
+              <button
+                type="button"
+                className="btn contact__empty-add"
+                onClick={ (event) => { this.handleEmptyAddClick(event); } }
+              ><i className="fa fa-user-plus"></i> Add Contact</button>
+            </>
           : cardElements }
         { this.state.removalNotice &&
-          <p className="contact__removal-notice" role="status">
+          <p className="contact__notice" role="status">
             { this.state.removalNotice }
+          </p> }
+        { this.state.addNotice &&
+          <p className="contact__notice" role="status">
+            { this.state.addNotice }
+          </p> }
+        { this.state.storageNotice &&
+          <p className="contact__notice" role="status">
+            { this.state.storageNotice }
           </p> }
         <div
           className={ 'modal contact-modal' + (this.state.detailModalOpen ? ' show' : '') }
@@ -401,12 +597,36 @@ export class Modal extends React.Component {
                   onClick={ () => { this.handleDetailModalClose(); } }
                   ref={ this.setDetailCloseButtonRef }
                 ><i className="fa fa-times"></i> Close</button>
+                <button
+                  className="btn"
+                  onClick={ () => { this.handleAddContact(); } }
+                ><i className="fa fa-user-plus"></i> Add Contact</button>
               </div>
               <div className="modal-body">
                 <h1 id="contact-modal-title">
                   { name }
                 </h1>
                 <div className="contact-information">
+                  <div className="contact-information__item">
+                    <label htmlFor="name">
+                      Name
+                    </label>
+                    <input
+                      type="text"
+                      id="name"
+                      value={ name }
+                      maxLength={ 80 }
+                      required
+                      onChange={ (event) => this.handleNameChange(event) }
+                      aria-invalid={ isNameInvalid }
+                      aria-errormessage={ isNameInvalid ? 'name-error' : undefined }
+                    />
+                    { isNameInvalid &&
+                      <span id="name-error" className="contact-information__error" role="status">
+                        Enter a name for the contact
+                      </span>
+                    }
+                  </div>
                   <div className="contact-information__item">
                     <label htmlFor="email">
                       Email
