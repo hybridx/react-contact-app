@@ -2,6 +2,11 @@ body {
   background: #e1e6ed;
 }
 
+:root {
+  --danger: #b00020;
+  --muted: #535353;
+}
+
 .contact {
   display: flex;
   flex-wrap: wrap;
@@ -25,18 +30,46 @@ body {
   font-weight: 700;
   font-size: 4rem;
   transition: all 320ms ease-in-out;
+  /* Native <button> reset: the card look comes entirely from the
+     neomorphic shadows and typography above. */
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .contact__card:hover {
   box-shadow: inset 9px 9px 16px rgb(163,177,198,0.6), inset -9px -9px 16px rgba(255,255,255, 0.5);
 }
 
-.modal-header {
+.contact__empty {
+  width: 100%;
+  margin: 3rem 1rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 1.25rem;
+}
+
+.contact__removal-notice {
+  width: 100%;
+  margin: 0 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.modal-header,
+.confirm-modal .modal-footer {
   justify-content: flex-end;
 }
 
 .modal-header button.btn {
-  color: #535353;
+  color: var(--muted);
+}
+
+.modal-header button.btn:disabled {
+  color: #a3b1c6;
+  cursor: not-allowed;
 }
 
 .modal-header button:first-child {
@@ -72,7 +105,22 @@ body {
 }
 
 .modal-body .contact-information .contact-information__error {
-  color: #b00020;
+  color: var(--danger);
   font-size: 0.8rem;
   margin-left: 1rem;
+}
+
+/* Destructive actions and error text share the danger color, and
+   secondary text shares the muted gray; both are declared on :root
+   above. */
+.btn--danger {
+  color: var(--danger);
+}
+
+.confirm-modal .modal-footer {
+  border: none;
+}
+
+.confirm-modal .modal-body .confirm-modal__title {
+  font-size: 1.5rem;
 }
