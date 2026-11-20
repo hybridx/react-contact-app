@@ -51,6 +51,13 @@ body {
   font-size: 1.25rem;
 }
 
+/* The empty grid's add action, centered under the message. */
+.contact__empty-add {
+  display: block;
+  margin: 0 auto 3rem;
+  color: var(--muted);
+}
+
 .contact__notice {
   width: 100%;
   margin: 0 1rem;

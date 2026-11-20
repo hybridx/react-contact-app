@@ -18,15 +18,18 @@ React and Bootstrap styling.
 - **Contact detail modal** — shows the contact's name, email, phone, address
   and birthday, with Edit and Remove actions and an Add Contact action in
   the header. Add Contact appends the current form values to the list (and
-  persists them); an invalid phone or email value is never persisted.
+  persists them); an invalid phone or email value, or an empty name, is
+  never persisted. When the list is empty, an Add Contact button beside
+  the "No contacts yet" message opens the same modal, so an empty list can
+  grow again.
 - **Phone validation** — a phone number may contain digits, spaces and the
   separators `+ - ( )`, and is otherwise rejected. The field is optional: an
   empty value is valid.
 - **Email validation** — an email must be a well-formed address such as
   `name@example.com`. The field is optional: an empty value is valid.
-- **Accessible inline errors** — invalid values show an inline error message
-  wired to the input via `aria-invalid` / `aria-errormessage` and announced
-  politely (`role="status"`).
+- **Accessible inline errors** — an invalid value or a missing name shows
+  an inline error message wired to the input via `aria-invalid` /
+  `aria-errormessage` and announced politely (`role="status"`).
 - **Edit protection** — clicking a contact card never clobbers a name,
   phone, email, address or birthday value the user is typing, and an invalid
   value is never persisted by a card click.

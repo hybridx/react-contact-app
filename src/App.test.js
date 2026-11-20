@@ -1007,6 +1007,125 @@ describe('contact list persistence', () => {
 
     expect(queryByTitle('John Doe')).toBeNull();
     expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
+    // The refusal is not silent: the name field is required and wired
+    // to an inline error, like the email and phone fields.
+    const nameInput = getByLabelText(/name/i);
+    expect(nameInput).toHaveAttribute('required');
+    expect(nameInput).toHaveAttribute('aria-invalid', 'true');
+    expect(nameInput).toHaveAttribute('aria-errormessage', 'name-error');
+    expect(getByText('Enter a name for the contact'))
+      .toHaveAttribute('role', 'status');
+  });
+
+  test('an added contact is stored and announced with its name trimmed', () => {
+    const { getByLabelText, getByText, getByTitle } = render(<App />);
+
+    fireEvent.change(getByLabelText(/name/i), { target: { value: '  Jane Roe  ' } });
+    fireEvent.click(getByText('Add Contact'));
+
+    expect(getByTitle('Jane Roe')).toBeInTheDocument();
+    expect(getByText(/jane roe was added to your contacts/i))
+      .toHaveAttribute('role', 'status');
+    const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY));
+    expect(stored[10].name).toBe('Jane Roe');
+  });
+
+  test('the emptied contact list stays empty after remounting the app', () => {
+    // Seed a single contact so one confirmed removal empties the
+    // list; the persisted empty list must not fall back to the demo
+    // contacts on the next mount.
+    saveContacts([
+      { id: 'zed', label: 'Z', name: 'Zed Zane', email: 'zed@example.com',
+        phone: '555-0100', address: '1 Main St', birthday: '2000-01-01' },
+    ]);
+    const first = render(<App />);
+
+    fireEvent.click(first.getByText('Z'));
+    fireEvent.click(first.getByText('Remove'));
+    fireEvent.click(first.getByRole('button', { name: 'Remove contact' }));
+    first.unmount();
+
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY))).toEqual([]);
+
+    const second = render(<App />);
+    expect(second.getByText('No contacts yet')).toBeInTheDocument();
+    expect(second.queryByText('A')).toBeNull();
+  });
+
+  test('the empty state offers an Add Contact action that opens the modal', () => {
+    saveContacts([]);
+    const { getByText, getByRole, getAllByRole, getByLabelText, getByTitle } =
+      render(<App />);
+
+    expect(getByText('No contacts yet')).toBeInTheDocument();
+    fireEvent.click(getByRole('button', { name: 'Add Contact' }));
+
+    // The modal opens with the default form and focus moved into it,
+    // so the empty grid is not a dead end for the primary task.
+    expect(getByRole('button', { name: 'Close' })).toHaveFocus();
+
+    fireEvent.change(getByLabelText(/name/i), { target: { value: 'Jane Roe' } });
+    // Both the empty-state button and the modal-header action are
+    // rendered while the list is empty; the header one submits the
+    // form.
+    fireEvent.click(getAllByRole('button', { name: 'Add Contact' })[1]);
+
+    expect(getByTitle('Jane Roe')).toBeInTheDocument();
+    expect(getByText(/jane roe was added to your contacts/i))
+      .toHaveAttribute('role', 'status');
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY))).toHaveLength(1);
+  });
+
+  test('a successful save keeps the failed-read notice for the session', () => {
+    window.localStorage.setItem(STORAGE_KEY, 'not json');
+    const { getByLabelText, getByText, getByTitle } = render(<App />);
+
+    expect(getByText(/saved contacts could not be read/i))
+      .toHaveAttribute('role', 'status');
+
+    // The write itself succeeds, but it does not undo the read
+    // failure: the contacts stored before the failed read were
+    // never restored, so the notice must survive the save.
+    fireEvent.change(getByLabelText(/name/i), { target: { value: 'Jane Roe' } });
+    fireEvent.click(getByText('Add Contact'));
+
+    expect(getByTitle('Jane Roe')).toBeInTheDocument();
+    expect(getByText(/jane roe was added/i)).toHaveAttribute('role', 'status');
+    expect(getByText(/saved contacts could not be read/i))
+      .toHaveAttribute('role', 'status');
+  });
+
+  test('a successful save clears an earlier save-failure notice', () => {
+    // jsdom's localStorage methods cannot be spied on directly, so
+    // spy on the property getter and hand out a storage whose
+    // writes always fail.
+    const realStorage = window.localStorage;
+    const failingStorage = {
+      getItem: (key) => realStorage.getItem(key),
+      setItem: () => { throw new Error('quota exceeded'); },
+      removeItem: (key) => realStorage.removeItem(key),
+      clear: () => realStorage.clear(),
+    };
+    const getter = jest.spyOn(window, 'localStorage', 'get')
+      .mockReturnValue(failingStorage);
+    let view;
+    try {
+      view = render(<App />);
+      fireEvent.change(view.getByLabelText(/name/i), { target: { value: 'Jane Roe' } });
+      fireEvent.click(view.getByText('Add Contact'));
+      expect(view.getByText(/contacts could not be saved/i))
+        .toHaveAttribute('role', 'status');
+    } finally {
+      getter.mockRestore();
+    }
+
+    // The next successful save resolves the save failure, so its
+    // notice is cleared again.
+    fireEvent.change(view.getByLabelText(/name/i), { target: { value: 'John Roe' } });
+    fireEvent.click(view.getByText('Add Contact'));
+
+    expect(view.getByTitle('John Roe')).toBeInTheDocument();
+    expect(view.queryByText(/contacts could not be saved/i)).toBeNull();
   });
 
   test('card clicks load the values of a restored contact', () => {
