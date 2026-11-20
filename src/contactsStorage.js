@@ -22,15 +22,22 @@ function resolveStorage(storage) {
   }
 }
 
-// Only a list of contact-shaped entries (plain objects) can be
-// restored; anything else — null entries, numbers, strings, nested
-// arrays — is corrupt data that would crash rendering downstream.
+// Only a list of contact-shaped entries can be restored: plain
+// objects carrying the id, name and label the grid, the detail view
+// and the removal targeting depend on. Anything else — null
+// entries, numbers, strings, nested arrays, entries missing those
+// fields — is corrupt data that would render nameless cards or
+// break the removal targeting downstream, so it is rejected as a
+// failed read.
 function isContactList(value) {
   return Array.isArray(value) &&
     value.every((contact) => (
       contact !== null &&
       typeof contact === 'object' &&
-      !Array.isArray(contact)
+      !Array.isArray(contact) &&
+      contact.id !== undefined && contact.id !== null &&
+      typeof contact.name === 'string' && contact.name.trim() !== '' &&
+      typeof contact.label === 'string'
     ));
 }
 

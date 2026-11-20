@@ -614,12 +614,31 @@ describe('contact card accessibility', () => {
     expect(cards).toHaveLength(10);
     const initials = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
     cards.forEach((card, index) => {
-      // The name includes the distinguishing initial, so ten cards
-      // sharing one demo record are still told apart (WCAG 4.1.2).
+      // The name includes the distinguishing initial and a
+      // positional suffix, so ten cards sharing one demo record
+      // are still told apart (WCAG 4.1.2).
       expect(card).toHaveAttribute(
-        'aria-label', 'Deepesh Nair, contact ' + initials[index]
+        'aria-label',
+        `Deepesh Nair, contact ${initials[index]} (${index + 1} of 10)`
       );
     });
+  });
+
+  test('cards for contacts with the same name and label get distinct accessible names', () => {
+    const { getByLabelText, getByText, getAllByTitle } = render(<App />);
+
+    // Two adds of the same name produce two cards whose label is
+    // the same initial; their accessible names must still differ.
+    fireEvent.change(getByLabelText(/name/i), { target: { value: 'Deepesh Nair' } });
+    fireEvent.click(getByText('Add Contact'));
+    fireEvent.change(getByLabelText(/name/i), { target: { value: 'Deepesh Nair' } });
+    fireEvent.click(getByText('Add Contact'));
+
+    const names = getAllByTitle('Deepesh Nair').map(
+      (card) => card.getAttribute('aria-label')
+    );
+    expect(names).toHaveLength(12);
+    expect(new Set(names).size).toBe(12);
   });
 });
 
@@ -724,6 +743,19 @@ describe('contacts storage helpers', () => {
       .toEqual({ contacts: null, loadFailed: true });
   });
 
+  test('loadContacts reports a failed read for entries missing required fields', () => {
+    // Entries without the id, name and label the grid and the
+    // removal targeting depend on are corrupt data: restoring them
+    // would render nameless cards and let a confirmed removal
+    // delete every id-less entry at once.
+    expect(loadContacts(fakeStorage({ [STORAGE_KEY]: '[{}]' })))
+      .toEqual({ contacts: null, loadFailed: true });
+    expect(loadContacts(fakeStorage({ [STORAGE_KEY]: '[{"id":1,"label":"A"}]' })))
+      .toEqual({ contacts: null, loadFailed: true });
+    expect(loadContacts(fakeStorage({ [STORAGE_KEY]: '[{"id":1,"name":"Jane"}]' })))
+      .toEqual({ contacts: null, loadFailed: true });
+  });
+
   test('loadContacts fails soft when the storage read throws', () => {
     const storage = {
       getItem: () => { throw new Error('read failed'); },
@@ -813,6 +845,28 @@ describe('contact list persistence', () => {
     });
   });
 
+  test('Add Contact clears the selection so Remove cannot target the stale card', () => {
+    const { getByLabelText, getByText, getByRole } = render(<App />);
+
+    // Open a card, then add a different contact: the form resets to
+    // the defaults, so the selection must not survive the add —
+    // otherwise Remove would confirm against the default contact
+    // while deleting the previously selected card.
+    fireEvent.click(getByText('A'));
+    fireEvent.change(getByLabelText(/name/i), { target: { value: 'Jane Roe' } });
+    fireEvent.change(getByLabelText(/email/i), { target: { value: 'jane@example.com' } });
+    fireEvent.click(getByText('Add Contact'));
+
+    expect(getByRole('button', { name: 'Remove' })).toBeDisabled();
+
+    // Selecting a card again re-arms the removal for that contact,
+    // and the confirmation names the contact that will be removed.
+    fireEvent.click(getByText('B'));
+    fireEvent.click(getByRole('button', { name: 'Remove' }));
+    expect(getByRole('alertdialog'))
+      .toHaveTextContent(/Remove Deepesh Nair from your contacts\?/);
+  });
+
   test('an added contact is still listed after remounting the app', () => {
     const first = render(<App />);
     fireEvent.change(first.getByLabelText(/name/i), { target: { value: 'Jane Roe' } });
@@ -842,7 +896,8 @@ describe('contact list persistence', () => {
 
   test('announces when a change could not be persisted', () => {
     // jsdom's localStorage methods cannot be spied on directly, so
-    // swap in a storage whose writes always fail.
+    // spy on the property getter and hand out a storage whose
+    // writes always fail.
     const realStorage = window.localStorage;
     const failingStorage = {
       getItem: (key) => realStorage.getItem(key),
@@ -850,11 +905,8 @@ describe('contact list persistence', () => {
       removeItem: (key) => realStorage.removeItem(key),
       clear: () => realStorage.clear(),
     };
-    Object.defineProperty(window, 'localStorage', {
-      value: failingStorage,
-      configurable: true,
-      writable: true,
-    });
+    const getter = jest.spyOn(window, 'localStorage', 'get')
+      .mockReturnValue(failingStorage);
     try {
       const { getByLabelText, getByText, getByTitle } = render(<App />);
 
@@ -867,11 +919,7 @@ describe('contact list persistence', () => {
       expect(getByText(/contacts could not be saved/i))
         .toHaveAttribute('role', 'status');
     } finally {
-      Object.defineProperty(window, 'localStorage', {
-        value: realStorage,
-        configurable: true,
-        writable: true,
-      });
+      getter.mockRestore();
     }
   });
 
@@ -945,6 +993,16 @@ describe('contact list persistence', () => {
     const { getByLabelText, getByText, queryByTitle } = render(<App />);
 
     fireEvent.change(getByLabelText(/phone/i), { target: { value: 'abc123' } });
+    fireEvent.click(getByText('Add Contact'));
+
+    expect(queryByTitle('John Doe')).toBeNull();
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  test('Add Contact refuses to persist an empty name', () => {
+    const { getByLabelText, getByText, queryByTitle } = render(<App />);
+
+    fireEvent.change(getByLabelText(/name/i), { target: { value: '   ' } });
     fireEvent.click(getByText('Add Contact'));
 
     expect(queryByTitle('John Doe')).toBeNull();

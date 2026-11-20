@@ -69,7 +69,9 @@ const DEFAULT_CONTACTS = [
 const LOAD_FAILED_NOTICE =
   'Your saved contacts could not be read. Showing the default contacts.';
 const SAVE_FAILED_NOTICE =
-  'Contacts could not be saved. Your changes will be lost when the page is refreshed.';
+  'Contacts could not be saved. Your changes will be lost when the ' +
+  'page is refreshed. Try again, or copy your contacts before ' +
+  'leaving the page.';
 
 // Contacts added at runtime get their id from a timestamp paired
 // with a monotonic counter, so two adds within the same millisecond
@@ -98,7 +100,7 @@ export class Modal extends React.Component {
       // The id of the contact whose details are displayed in the modal;
       // this is the contact the Remove action targets. It is null
       // while no card is open, and Remove is gated on a selection.
-      selectedCardId: null,
+      selectedContactId: null,
       // Whether the remove-confirmation dialog is shown. Deletion is
       // two-step by design: the Remove button only opens this dialog
       // and the contact is deleted solely on an explicit confirm.
@@ -169,13 +171,15 @@ export class Modal extends React.Component {
 
   // Adds the contact currently shown in the modal to the contact list
   // and persists the list to localStorage, so it survives a page
-  // refresh. An invalid phone or email value is never persisted. The
-  // add is announced via a status message, the form resets to the
-  // defaults for the next entry, and a failed write is reported
-  // instead of silently losing the change on the next refresh.
+  // refresh. An empty name or an invalid phone or email value is
+  // never persisted. The add is announced via a status message, the
+  // form resets to the defaults for the next entry, and a failed
+  // write is reported instead of silently losing the change on the
+  // next refresh.
   handleAddContact() {
     const { contacts, name, email, phone, address, birthday } = this.state;
-    if (!isValidEmail(email) || !isValidPhone(phone)) {
+    if (String(name).trim() === '' ||
+        !isValidEmail(email) || !isValidPhone(phone)) {
       return;
     }
     const contact = {
@@ -191,6 +195,13 @@ export class Modal extends React.Component {
     const saved = saveContacts(nextContacts);
     this.setState({
       contacts: nextContacts,
+      // The form reset to the defaults no longer shows the selected
+      // contact, so the selection must not survive the add: Remove
+      // is disabled until a card is clicked again, and a pending
+      // confirmation is dismissed so it can never name one contact
+      // while deleting another.
+      selectedContactId: null,
+      confirmingRemove: false,
       // Reset the detail form to the defaults so the next contact
       // starts from a clean slate, and re-arm the edit latches so a
       // card click applies its values again.
@@ -240,7 +251,7 @@ export class Modal extends React.Component {
     // pending remove confirmation, so an open confirmation can never
     // retarget to a contact the user did not ask to remove.
     this.setState({
-      selectedCardId: contact.id,
+      selectedContactId: contact.id,
       removalNotice: null,
       addNotice: null,
       confirmingRemove: false,
@@ -261,7 +272,7 @@ export class Modal extends React.Component {
     this.setState({
       detailModalOpen: false,
       confirmingRemove: false,
-      selectedCardId: null,
+      selectedContactId: null,
       ...DEFAULT_CONTACT,
       nameEdited: false,
       phoneEdited: false,
@@ -286,7 +297,7 @@ export class Modal extends React.Component {
     // Gate: the confirmation dialog only opens when a card is
     // selected — with no selection there is nothing to remove, and
     // opening the dialog would present a no-op as a real removal.
-    if (this.state.selectedCardId === null) {
+    if (this.state.selectedContactId === null) {
       return;
     }
     this.setState({ confirmingRemove: true });
@@ -300,12 +311,12 @@ export class Modal extends React.Component {
   handleRemoveConfirm() {
     // Gate: confirming without a selection deletes nothing; the only
     // effect is closing the dialog.
-    if (this.state.selectedCardId === null) {
+    if (this.state.selectedContactId === null) {
       this.setState({ confirmingRemove: false });
       return;
     }
     const nextContacts = this.state.contacts.filter(
-      (contact) => contact.id !== this.state.selectedCardId
+      (contact) => contact.id !== this.state.selectedContactId
     );
     // Persist the removal so the contact stays gone after a page
     // refresh; the persisted list is the source of truth. A failed
@@ -314,7 +325,7 @@ export class Modal extends React.Component {
     const saved = saveContacts(nextContacts);
     this.setState((prevState) => ({
       contacts: nextContacts,
-      selectedCardId: null,
+      selectedContactId: null,
       confirmingRemove: false,
       // Close the detail modal: the contact it showed is gone, and
       // with the modal closed, moving focus back to the grid no
@@ -454,12 +465,18 @@ export class Modal extends React.Component {
   }
 
   renderModal() {
-    const cardElements = this.state.contacts.map((contact) =>
+    // Each card's accessible name carries a positional suffix so it
+    // stays unique even when contacts share a name and label (e.g.
+    // two adds of the same name), letting screen-reader users tell
+    // the cards apart (WCAG 4.1.2).
+    const contactCount = this.state.contacts.length;
+    const cardElements = this.state.contacts.map((contact, index) =>
       <button
         key={ contact.id }
         type="button"
         className="contact__card"
-        aria-label={ `${contact.name}, contact ${contact.label}` }
+        aria-label={ `${contact.name}, contact ${contact.label} ` +
+          `(${index + 1} of ${contactCount})` }
         title={ contact.name }
         onClick={ (event) => { this.handleCardClick(contact, event); } }
       >{ contact.label } </button>);
@@ -470,7 +487,7 @@ export class Modal extends React.Component {
     const address = this.state.address;
     const birthday = this.state.birthday;
     const confirmingRemove = this.state.confirmingRemove;
-    const hasSelection = this.state.selectedCardId !== null;
+    const hasSelection = this.state.selectedContactId !== null;
     const isPhoneInvalid = !isValidPhone(phone);
     const isEmailInvalid = !isValidEmail(email);
     return (
