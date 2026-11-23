@@ -8,6 +8,9 @@ React and Bootstrap styling.
 
 - **Contact-card grid** — a grid of contact cards; clicking a card opens the
   contact detail modal and fills in the contact's details.
+- **Contact search** — the search box above the grid filters the contact
+  cards by name as you type, matching case-insensitively: searching for
+  "john" finds "John Doe".
 - **Persistent contact list** — the contact list is stored in the browser's
   `localStorage` (key `react-contact-app.contacts`) and restored on the next
   visit, so contacts survive a page refresh; added and removed contacts are

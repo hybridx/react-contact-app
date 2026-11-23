@@ -712,6 +712,103 @@ describe('detail modal interaction', () => {
   });
 });
 
+describe('contact search', () => {
+  test('shows every contact while the search box is empty', () => {
+    const { getByLabelText, getAllByTitle } = render(<App />);
+
+    fireEvent.change(getByLabelText(/search/i), { target: { value: '' } });
+
+    expect(getAllByTitle('Deepesh Nair')).toHaveLength(10);
+  });
+
+  test('matches names case-insensitively as the query is typed', () => {
+    const { getByLabelText, getAllByTitle } = render(<App />);
+    const searchInput = getByLabelText(/search/i);
+
+    // Lowercase, uppercase and exact-case queries all match the
+    // capitalized contact name.
+    fireEvent.change(searchInput, { target: { value: 'deepesh' } });
+    expect(getAllByTitle('Deepesh Nair')).toHaveLength(10);
+
+    fireEvent.change(searchInput, { target: { value: 'DEEPESH' } });
+    expect(getAllByTitle('Deepesh Nair')).toHaveLength(10);
+
+    fireEvent.change(searchInput, { target: { value: 'Deepesh' } });
+    expect(getAllByTitle('Deepesh Nair')).toHaveLength(10);
+  });
+
+  test('hides contacts whose name does not contain the query', () => {
+    saveContacts([
+      { id: 'john', label: 'J', name: 'John Doe', email: 'jdoe@example.com',
+        phone: '555-0100', address: '1 Main St', birthday: '2000-01-01' },
+      { id: 'jane', label: 'J', name: 'Jane Roe', email: 'jane@example.com',
+        phone: '555-0101', address: '2 Main St', birthday: '2000-01-02' },
+    ]);
+
+    const { getByLabelText, getByTitle, queryByTitle } = render(<App />);
+
+    fireEvent.change(getByLabelText(/search/i), { target: { value: 'john' } });
+
+    expect(getByTitle('John Doe')).toBeInTheDocument();
+    expect(queryByTitle('Jane Roe')).toBeNull();
+  });
+
+  test('shows a message when no contact matches the search', () => {
+    const { getByLabelText, getByText, queryAllByTitle } = render(<App />);
+
+    fireEvent.change(getByLabelText(/search/i), { target: { value: 'zzz' } });
+
+    expect(getByText('No contacts match your search')).toBeInTheDocument();
+    expect(queryAllByTitle('Deepesh Nair')).toHaveLength(0);
+  });
+
+  test('clearing the search restores the full grid', () => {
+    const { getByLabelText, getAllByTitle } = render(<App />);
+
+    fireEvent.change(getByLabelText(/search/i), { target: { value: 'zzz' } });
+    fireEvent.change(getByLabelText(/search/i), { target: { value: '' } });
+
+    expect(getAllByTitle('Deepesh Nair')).toHaveLength(10);
+  });
+
+  test('a contact added as John Doe is found by searching for john', () => {
+    const { getByLabelText, getByText, getByTitle, queryAllByTitle } =
+      render(<App />);
+
+    fireEvent.change(getByLabelText(/name/i), { target: { value: 'John Doe' } });
+    fireEvent.click(getByText('Add Contact'));
+
+    fireEvent.change(getByLabelText(/search/i), { target: { value: 'john' } });
+
+    // The lowercase query finds the added contact (the issue's
+    // repro) while the non-matching demo cards are hidden.
+    expect(getByTitle('John Doe')).toBeInTheDocument();
+    expect(queryAllByTitle('Deepesh Nair')).toHaveLength(0);
+  });
+
+  test('removing a contact while a search is active keeps the filter applied', () => {
+    const { getByLabelText, getByText, getByRole, container } = render(<App />);
+
+    fireEvent.change(getByLabelText(/search/i), { target: { value: 'deepesh' } });
+    fireEvent.click(getByText('A'));
+    fireEvent.click(getByText('Remove'));
+    fireEvent.click(getByRole('button', { name: 'Remove contact' }));
+
+    // The removal persists and the grid still shows only the
+    // contacts matching the active search.
+    expect(container.querySelectorAll('.contact__card')).toHaveLength(9);
+  });
+
+  test('a search with no matches does not hide the empty grid message', () => {
+    saveContacts([]);
+    const { getByText, queryByLabelText } = render(<App />);
+
+    expect(getByText('No contacts yet')).toBeInTheDocument();
+    // With no contacts to filter there is no search box either.
+    expect(queryByLabelText(/search/i)).toBeNull();
+  });
+});
+
 describe('contacts storage helpers', () => {
   test('loadContacts reports an empty first run when nothing has been persisted', () => {
     expect(loadContacts(fakeStorage())).toEqual({ contacts: null, loadFailed: false });

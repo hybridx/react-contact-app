@@ -51,6 +51,30 @@ body {
   font-size: 1.25rem;
 }
 
+/* The search field: a full-width row above the card grid, so it can
+   filter the cards below as the user types. */
+.contact__search {
+  display: flex;
+  align-items: center;
+  flex-basis: 100%;
+  margin: 1rem;
+}
+
+.contact__search label {
+  color: var(--muted);
+  margin-right: 0.75rem;
+}
+
+.contact__search input {
+  flex: 1;
+  max-width: 24rem;
+  border: none;
+  border-radius: 20px;
+  padding: 0.5rem 1.25rem;
+  box-shadow: inset 5px 5px 10px rgb(163,177,198,0.6),
+              inset -5px -5px 10px rgba(255,255, 0.5);
+}
+
 /* The empty grid's add action, centered under the message. */
 .contact__empty-add {
   display: block;
