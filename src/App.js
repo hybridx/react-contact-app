@@ -212,6 +212,10 @@ export class Modal extends React.Component {
     const saved = saveContacts(nextContacts);
     this.setState((prevState) => ({
       contacts: nextContacts,
+      // A contact added while a search filter is active would be
+      // invisible behind that filter, so the search is cleared:
+      // the new card — and every other contact — is visible again.
+      searchQuery: '',
       // The form reset to the defaults no longer shows the selected
       // contact, so the selection must not survive the add: Remove
       // is disabled until a card is clicked again, and a pending
@@ -600,7 +604,7 @@ export class Modal extends React.Component {
             </>
           : cardElements }
         { this.state.contacts.length > 0 && visibleContacts.length === 0 &&
-          <p className="contact__empty" tabIndex="-1">
+          <p className="contact__empty" tabIndex="-1" role="status">
             No contacts match your search
           </p> }
         { this.state.removalNotice &&

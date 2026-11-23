@@ -72,7 +72,7 @@ body {
   border-radius: 20px;
   padding: 0.5rem 1.25rem;
   box-shadow: inset 5px 5px 10px rgb(163,177,198,0.6),
-              inset -5px -5px 10px rgba(255,255, 0.5);
+              inset -5px -5px 10px rgba(255,255,255, 0.5);
 }
 
 /* The empty grid's add action, centered under the message. */

@@ -758,8 +758,41 @@ describe('contact search', () => {
 
     fireEvent.change(getByLabelText(/search/i), { target: { value: 'zzz' } });
 
-    expect(getByText('No contacts match your search')).toBeInTheDocument();
+    const message = getByText('No contacts match your search');
+    expect(message).toBeInTheDocument();
+    // The empty result set is announced politely, so a screen-reader
+    // user typing in the search box learns the query matched nothing
+    // (WCAG 4.1.3 Status Messages).
+    expect(message).toHaveAttribute('role', 'status');
     expect(queryAllByTitle('Deepesh Nair')).toHaveLength(0);
+  });
+
+  test('a whitespace-only query is treated as an empty search', () => {
+    const { getByLabelText, getAllByTitle } = render(<App />);
+
+    fireEvent.change(getByLabelText(/search/i), { target: { value: '   ' } });
+
+    expect(getAllByTitle('Deepesh Nair')).toHaveLength(10);
+  });
+
+  test('card accessible names count only the cards visible under the filter', () => {
+    saveContacts([
+      { id: 'john', label: 'J', name: 'John Doe', email: 'jdoe@example.com',
+        phone: '555-0100', address: '1 Main St', birthday: '2000-01-01' },
+      { id: 'jane', label: 'J', name: 'Jane Roe', email: 'jane@example.com',
+        phone: '555-0101', address: '2 Main St', birthday: '2000-01-02' },
+    ]);
+
+    const { getByLabelText, getByTitle } = render(<App />);
+
+    fireEvent.change(getByLabelText(/search/i), { target: { value: 'john' } });
+
+    // The positional suffix counts the filtered set, not the stored
+    // list, so the single visible card is "(1 of 1)" (WCAG 4.1.2).
+    expect(getByTitle('John Doe')).toHaveAttribute(
+      'aria-label',
+      'John Doe, contact J (1 of 1)'
+    );
   });
 
   test('clearing the search restores the full grid', () => {
@@ -797,6 +830,25 @@ describe('contact search', () => {
     // The removal persists and the grid still shows only the
     // contacts matching the active search.
     expect(container.querySelectorAll('.contact__card')).toHaveLength(9);
+  });
+
+  test('adding a contact while a search is active clears the filter', () => {
+    const { getByLabelText, getByText, getByTitle, getAllByTitle } =
+      render(<App />);
+
+    // A query matching none of the existing contacts is active when
+    // the new contact is added.
+    fireEvent.change(getByLabelText(/search/i), { target: { value: 'zzz' } });
+
+    fireEvent.change(getByLabelText(/name/i), { target: { value: 'John Doe' } });
+    fireEvent.click(getByText('Add Contact'));
+
+    // The add clears the search instead of leaving the new card
+    // hidden behind the stale filter: the search box is empty and
+    // every contact, including the new one, is visible.
+    expect(getByLabelText(/search/i)).toHaveValue('');
+    expect(getByTitle('John Doe')).toBeInTheDocument();
+    expect(getAllByTitle('Deepesh Nair')).toHaveLength(10);
   });
 
   test('a search with no matches does not hide the empty grid message', () => {
