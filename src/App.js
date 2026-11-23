@@ -125,6 +125,11 @@ export class Modal extends React.Component {
       // grid. This also keeps Bootstrap's own modal focus enforcement
       // out of the way of the confirmation dialog's focus handling.
       detailModalOpen: false,
+      // The current value of the search box. An empty value shows
+      // every contact; a non-empty value narrows the grid to the
+      // contacts whose name contains the query, ignoring case, so
+      // searching for "john" still finds "John Doe".
+      searchQuery: '',
       // Whether the user has typed in a field; a card click must never
       // clobber a value the user is editing.
       nameEdited: false,
@@ -207,6 +212,10 @@ export class Modal extends React.Component {
     const saved = saveContacts(nextContacts);
     this.setState((prevState) => ({
       contacts: nextContacts,
+      // A contact added while a search filter is active would be
+      // invisible behind that filter, so the search is cleared:
+      // the new card — and every other contact — is visible again.
+      searchQuery: '',
       // The form reset to the defaults no longer shows the selected
       // contact, so the selection must not survive the add: Remove
       // is disabled until a card is clicked again, and a pending
@@ -238,6 +247,12 @@ export class Modal extends React.Component {
         ? (prevState.storageNoticeKind === 'load' ? 'load' : null)
         : 'save',
     }));
+  }
+
+  // Typing in the search box updates the query the grid is
+  // filtered by (see renderModal); the match is case-insensitive.
+  handleSearchChange(event) {
+    this.setState({ searchQuery: event.target.value });
   }
 
   handleNameChange(event) {
@@ -522,12 +537,27 @@ export class Modal extends React.Component {
   }
 
   renderModal() {
+    // The search box narrows the grid to the contacts whose name
+    // contains the typed query, ignoring case: both sides are
+    // compared lowercased, so searching for "john" finds "John
+    // Doe" and searching "JANE" finds "Jane Roe". Only the cards
+    // shown are filtered — the stored list is untouched, so
+    // removals and persistence keep applying to every contact.
+    const searchQuery = this.state.searchQuery.trim().toLowerCase();
+    const visibleContacts = searchQuery === ''
+      ? this.state.contacts
+      : this.state.contacts.filter(
+          (contact) =>
+            String(contact.name).toLowerCase().includes(searchQuery)
+        );
     // Each card's accessible name carries a positional suffix so it
     // stays unique even when contacts share a name and label (e.g.
     // two adds of the same name), letting screen-reader users tell
-    // the cards apart (WCAG 4.1.2).
-    const contactCount = this.state.contacts.length;
-    const cardElements = this.state.contacts.map((contact, index) =>
+    // the cards apart (WCAG 4.1.2). The positions count the cards
+    // visible under the current search, so they stay meaningful
+    // while a filter is active.
+    const contactCount = visibleContacts.length;
+    const cardElements = visibleContacts.map((contact, index) =>
       <button
         key={ contact.id }
         type="button"
@@ -550,6 +580,19 @@ export class Modal extends React.Component {
     const isEmailInvalid = !isValidEmail(email);
     return (
       <div className="contact" ref={ this.setContactGridRef }>
+        { this.state.contacts.length > 0 &&
+          <div className="contact__search">
+            <label htmlFor="contact-search">
+              Search contacts
+            </label>
+            <input
+              type="search"
+              id="contact-search"
+              value={ this.state.searchQuery }
+              placeholder="Search by name"
+              onChange={ (event) => this.handleSearchChange(event) }
+            />
+          </div> }
         { this.state.contacts.length === 0
           ? <>
               <p className="contact__empty" tabIndex="-1">No contacts yet</p>
@@ -560,6 +603,10 @@ export class Modal extends React.Component {
               ><i className="fa fa-user-plus"></i> Add Contact</button>
             </>
           : cardElements }
+        { this.state.contacts.length > 0 && visibleContacts.length === 0 &&
+          <p className="contact__empty" tabIndex="-1" role="status">
+            No contacts match your search
+          </p> }
         { this.state.removalNotice &&
           <p className="contact__notice" role="status">
             { this.state.removalNotice }
